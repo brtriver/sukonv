@@ -1,0 +1,3 @@
+[submodule "lithium"]
+	path = lithium
+	url = /usr/local/src/lithium.git
