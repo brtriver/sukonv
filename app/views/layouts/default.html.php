@@ -12,7 +12,7 @@
 <html>
 <head>
 	<?php echo $this->html->charset();?>
-	<title>Application > <?php echo $this->title(); ?></title>
+	<title><?php echo $this->title(); ?></title>
 	<?php echo $this->html->style(array('debug', 'lithium', 'main')); ?>
 	<?php echo $this->scripts(); ?>
 	<?php echo $this->html->link('Icon', null, array('type' => 'icon')); ?>
@@ -24,6 +24,9 @@
 			<h2>
 				Powered by <?php echo $this->html->link('Lithium', 'http://li3.rad-dev.org'); ?>.
 			</h2>
+		</div>
+		<div id="navi">
+            <p><?=$this->html->link('HOME', '/') ?></p>
 		</div>
 		<div id="content">
 			<?php echo $this->content(); ?>

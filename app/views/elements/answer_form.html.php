@@ -77,7 +77,6 @@
 
     <?=$this->form->submit($mode .' answer'); ?>
 <?=$this->form->hidden('parent_id', array('value' => $question->_id)); ?>
-<?=$this->form->hidden('_id'); ?>
 <?=$this->form->end(); ?>
 
 <?php if ($success): ?>

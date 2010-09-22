@@ -36,6 +36,7 @@
  * @see lithium\core\Environment
  */
 use lithium\data\Connections;
+use lithium\core\Environment;
 
 /**
  * Uncomment this configuration to use MongoDB as your default database.
@@ -70,13 +71,14 @@ use lithium\data\Connections;
 
 Connections::add('default', array('type' =>  'MongoDb', 'database' => 'sukonv', 'host' => 'localhost'));
 
-Connections::get('default')->
-applyFilter('read', function($self, $params, $chain){
-echo "<pre style='color: red'>";
-print_r($params['options']);
-echo "</pre>";
-return $chain->next($self, $params, $chain);    
-});
-
+if (!Environment::is('production')) {
+    Connections::get('default')->
+    applyFilter('read', function($self, $params, $chain){
+    echo "<pre style='color: red'>";
+    print_r($params['options']);
+    echo "</pre>";
+    return $chain->next($self, $params, $chain);    
+    });
+}
 
 ?>

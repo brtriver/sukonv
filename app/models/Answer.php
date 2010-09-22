@@ -15,7 +15,7 @@ class Answer extends \lithium\data\Model {
 		array('isParentId', 'message' => 'Related Question does not exist.'),
 		),
 	'url' => array(
-		array('isValidUrl', 'message' => 'URL is invalid.', 'required' => false),
+		array('isValidUrl', 'message' => 'URL is invalid.', 'skipEmpty' => true),
 		),
 	'description' => array(
 		array('notEmpty', 'message' => 'Description is empty.'),
@@ -53,30 +53,30 @@ class Answer extends \lithium\data\Model {
 		// for save
 	    Answer::applyFilter('save', function($self, $params, $chain) {
 			// set created, modified
-	        $answer = $params['data'];
-	        if (!$answer) {
-	            $answer['created'] = date('Y-m-d H:i:s');
-				$params['entity']->_id = $answer['_id'] = String::uuid($_SERVER);
-	        } else {
-	            $answer['modified'] = date('Y-m-d H:i:s');
-	        }
-	        $params['data'] = $answer;
+            $answer = $params['data'];
+            if (!$answer) {
+                $answer['created'] = date('Y-m-d H:i:s');
+				$answer['parent_id'] = $params['entity']->parent_id;
+				$params['entity']->_id = $answer['_id'] = new \MongoID();
+            } else {
+                $answer['modified'] = date('Y-m-d H:i:s');
+            }
+			$params['data'] = $answer;
+            // $chain->next($self, $params, $chain);
 			// set answer document to question.
-			// MEMO: entity ?? data ?? it's params before ??
+			// MEMO: entity ?? data ?? it's changed??
 			$question = Question::find($params['entity']->parent_id);
-			if (!isset($question->answer) || !is_array($question->answer)) {
-				$question->answer = array();
+			$p = ($params['entity']->to('array'));
+			$ent = ($question->answers)? $question->answers->to('array'): array();
+			// if the answers exist, added to array of answers with merge.
+			if (count($ent)) {
+				$answers = array_merge($ent, array($p['_id'] =>$p));
+			} else {
+				$answers = array($p['_id'] =>$p);
 			}
-			$question->answer[$answer['_id']] = $params['entity']->to('array');
+			$question->answers = $answers;
 			$question->save();
-//			$question->answer[]	        
-	        // return $chain->next($self, $params, $chain);
-	    });
-		// for create
-	    Answer::applyFilter('create', function($self, $params, $chain) {
-//			$question = Question::find($params['options']['id']);
-//			$params['record'] = $question;
-	        return $chain->next($self, $params, $chain);
+	        return true;
 	    });
 		// Validators
 		Validator::add('notEmptyItems',function ($value, $format, $options) {
@@ -102,6 +102,7 @@ class Answer extends \lithium\data\Model {
 			return $flg;
 		});
 		Validator::add('isValidUrl', function ($value, $format, $options){
+		    //return true;
 			return Validator::isUrl($value);
 		});
         Validator::add('isParentId', function ($value, $format, $options) {

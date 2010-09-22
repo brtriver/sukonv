@@ -8,8 +8,8 @@ class AnswersController extends \lithium\action\Controller {
     public function index() {
         $this->redirect(array('controller' => 'questions', 'action' => 'index'));
     }
-    public function add($id){
-		if (!$id || !($question = Question::find($id))) {
+    public function add($parent_id){
+		if (!$parent_id || !($question = Question::find($parent_id))) {
 			$this->redirect(array('controller' => 'questions', 'action' => 'index'));
 		}
         $success = false;
@@ -17,11 +17,13 @@ class AnswersController extends \lithium\action\Controller {
         if ($this->request->data) {
             $answer = Answer::create($this->request->data);
             if ($answer->validates()) {
-				unset($answer->_id);
-                $success = $answer->save();
+                $success = $answer->save(null, array('validator'=>false));
             }
+			if ($success) {
+				//$this->redirect(array('controller' => 'questions/view/' . $parent_id));
+			}
         } else {
-			$answer = Answer::create(array(),compact('id'));
+			$answer = Answer::create(array(),compact('parent_id'));
 		}
         return compact('success', 'answer', 'question', 'mode');    
      }

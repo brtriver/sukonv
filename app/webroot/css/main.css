@@ -18,3 +18,15 @@ textarea.description-text {
 	margin: 0px;
 	margin-bottom: 5px;
 }
+div#content h5.title {
+	background-color: #CECECE;
+	padding: 10px 0px 10px 10px;
+}
+div#content p.answer-description {
+	border: 1px solid lightgrey;
+	padding: 10px 0px 10px 10px;
+	margin-bottom: 0px;
+}
+div#content p.fw-list {
+	margin-bottom: 0px;
+}

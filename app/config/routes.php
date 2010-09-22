@@ -14,9 +14,10 @@ use lithium\core\Environment;
  * its action called 'view', and we pass a param to select the view file
  * to use (in this case, /app/views/pages/home.html.php)...
  */
-Router::connect('/', array('Pages::view', 'args' => array('home')));
+//Router::connect('/', array('Pages::view', 'args' => array('home')));
+Router::connect('/', array('controller' => 'questions', 'action' => 'index'));
 
-/**
+ /**
  * ...and connect the rest of 'Pages' controller's urls.
  */
 Router::connect('/pages/{:args}', 'Pages::view');

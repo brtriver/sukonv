@@ -4,20 +4,21 @@
 </p>
 
 <h4>Question</h4>
-<h5><?=$question->title ?></h5>
-<p>
+<h5 class='title'><?=$question->title ?></h5>
+<p class="q-description">
     <?=$question->description ?>
 </p>
 <h4>Answers</h4>
 <div id="answer-list">
-<?php if (!isset($question->answer) || count($question->answer) == 0): ?>
+<?php if (!isset($question->answers) || count($question->answers) == 0): ?>
     <p>
         <b>No answer, Could you answer this question?</b>
     </p>
 <?php else: ?>
-    <?php foreach ($question->answer->to('array') as $answer): ?>
-    <div>(<?=implode(",", $answer['framework']) ?>) posted by: XXX</div>
-    <h5><?=$answer['description']; ?></h5>
+    <?php foreach ($question->answers->to('array') as $answer): ?>
+	<p class='fw-list'>for <span class='fw'><?=implode("</span>,<span class='fw'>", $answer['framework']) ?></span></p>
+    <p class='answer-description'><?=$answer['description']; ?></p>
+    <p class='posted-by'>by: XXX</p>
     <?php endforeach ?>
 <?php endif ?>
 </div>

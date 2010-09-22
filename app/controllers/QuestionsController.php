@@ -29,6 +29,9 @@ class QuestionsController extends \lithium\action\Controller {
         } else {
 			$question = Question::create();
 		}
+		if ($success) {
+			 $this->redirect(array('controller' => 'questions', 'action' => 'index'));
+		}
         return compact('success', 'question', 'mode');    
     }
 	public function edit($id = null)
