@@ -31,8 +31,8 @@ use app\models\Question;
 	<?php     endforeach ?>
 	<?php endif ?>
 
-    <?=$this->form->field('tag_new');?>
-	<?php if ($err = $question->errors('tag_new')): ?>
+    <?=$this->form->field('new_tags');?>
+	<?php if ($err = $question->errors('new_tags')): ?>
 	<?php     foreach ((array)$err as $e): ?>
 		<p  class='error'><?=$e ?></p>
 	<?php     endforeach ?>
