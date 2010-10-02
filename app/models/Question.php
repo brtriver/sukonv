@@ -42,11 +42,11 @@ class Question extends \lithium\data\Model {
         parent::__init($options);
 		// for save
         Question::applyFilter('save', function($self, $params, $chain) {
-echo "<pre>";
-	print_r($params['entity']->to('array'));
-	echo "data";
-	print_r($params['data']);
-echo "</pre>";
+// echo "<pre>";
+// 	print_r($params['entity']->to('array'));
+// 	echo "data";
+// 	print_r($params['data']);
+// echo "</pre>";
 			// set created, modified
             $question = $params['data'];
             if (!$question) {

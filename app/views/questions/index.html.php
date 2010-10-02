@@ -6,7 +6,6 @@
 		<?=$this->html->link('edit', 'questions/edit/' . $question->_id) ?>
 		<?=$this->html->link('view', 'questions/view/' . $question->_id) ?>
 	</p>
-    <p><?php print_r($question->category) ?></p>
     <p><?=$question->description ?></p>
 </article>
 <?php endforeach; ?>

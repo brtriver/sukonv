@@ -16,7 +16,7 @@
     </p>
 <?php else: ?>
     <?php foreach ($question->answers->to('array') as $answer): ?>
-	<p class='fw-list'>for <span class='fw'><?=implode("</span>,<span class='fw'>", $answer['framework']) ?></span></p>
+	<p class='fw-list'>for <span class='fw'><?php echo implode("</span>,<span class='fw'>", $answer['framework']) ?></span></p>
     <p class='answer-description'><?=$answer['description']; ?></p>
     <p class='posted-by'>by: XXX</p>
     <?php endforeach ?>

@@ -56,4 +56,6 @@ Libraries::add('app', array('default' => true));
  */
 // Libraries::add('li3_docs');
 
+Libraries::add('li3_oauth');
+
 ?>

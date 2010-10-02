@@ -25,6 +25,9 @@
 				Powered by <?php echo $this->html->link('Lithium', 'http://li3.rad-dev.org'); ?>.
 			</h2>
 		</div>
+		<div id="user">
+<?=$this->view()->render(array('element' => 'user_information'),null); ?>
+		</div>
 		<div id="navi">
             <p><?=$this->html->link('HOME', '/') ?></p>
 		</div>

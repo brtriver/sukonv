@@ -34,14 +34,21 @@ Session::config(array(
  * @see lithium\action\Request::$data
  * @see lithium\security\Auth
  */
-// use lithium\security\Auth;
+use lithium\security\Auth;
 
-// Auth::config(array(
-// 	'default' => array(
-// 		'adapter' => 'Form',
-// 		'model' => 'User',
-// 		'fields' => array('username', 'password')
-// 	)
-// ));
+Auth::config(array(
+'default' => array(
+	'adapter' => 'Form',
+	'model' => 'User',
+	'fields' => array('email', 'password')
+	)
+));
+
+// debug information: is login?
+// Auth::applyFilter('check', function($self, $params, $chain) {
+// 	$flg =  $chain->next($self, $params, $chain);
+// 	if ($flg) echo "<p style='color: red'>now login</p>";
+// 	return $flg;
+// });
 
 ?>
