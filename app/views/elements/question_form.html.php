@@ -31,12 +31,29 @@ use app\models\Question;
 	<?php     endforeach ?>
 	<?php endif ?>
 
-    <?=$this->form->field('tag');?>
-	<?php if ($err = $question->errors('tag')): ?>
+    <?=$this->form->field('tag_new');?>
+	<?php if ($err = $question->errors('tag_new')): ?>
 	<?php     foreach ((array)$err as $e): ?>
 		<p  class='error'><?=$e ?></p>
 	<?php     endforeach ?>
 	<?php endif ?>
+
+
+	<div class="group-contents">
+<?php foreach ($question->tag as $tag): ?>
+	<?=$this->form->field(
+		'tag', 
+		array(
+			'type' => 'checkbox-multi', 
+			'checked'=>true, 
+			'value'=>$tag, 
+			'label' => $tag, 
+			'template' => 'field-checkbox', 
+			'wrap' => "style='display:inline;'"
+	)); ?>
+<?php endforeach ?>
+	</div>
+	
 
 	<?=$this->form->label('Level'); ?>
 	<?=$this->view()->render(
