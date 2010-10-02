@@ -1,2 +1,2 @@
 app/resources/tmp/cache/*
-web/.htaccess
+app/webroot/.htaccess
