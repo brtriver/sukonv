@@ -10,6 +10,7 @@
 <p class="q-description">
     <?=$question->description ?>
 </p>
+<p class='tag-list'>tag:<span class='tag'><?php echo implode("</span>,<span class='tag'>", $question->tag) ?></span></p>
 <h4>Answers</h4>
 <div id="answer-list">
 <?php if (!isset($question->answers) || count($question->answers) == 0): ?>
