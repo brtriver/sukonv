@@ -47,6 +47,19 @@ class Question extends \lithium\data\Model {
 // 	echo "data";
 // 	print_r($params['data']);
 // echo "</pre>";
+
+            // explode tags newly entered to array and add to the tag array
+            $form_data = $params['entity']->to('array');
+            if (!empty($form_data['tag'])) {
+                $new_tags  = preg_split('/[,\s]+/', $form_data['tag']);
+                if (count($new_tags)) {
+                    if (!is_array($params['data']['tag'])) {
+                        $params['data']['tag'] = array();
+                    }
+                    $params['data']['tag'] = array_merge($params['data']['tag'], $new_tags);
+                }
+            }
+
 			// set created, modified
             $question = $params['data'];
             if (!$question) {
@@ -55,6 +68,7 @@ class Question extends \lithium\data\Model {
                 $question['modified'] = date('Y-m-d H:i:s');
             }
             $params['data'] = $question;
+            
             return $chain->next($self, $params, $chain);
         });
 		// Validators
