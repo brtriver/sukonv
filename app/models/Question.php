@@ -49,17 +49,21 @@ class Question extends \lithium\data\Model {
 // echo "</pre>";
 
             // explode tags newly entered to array and add to the tag array
+            /*
             $form_data = $params['entity']->to('array');
-            if (!empty($form_data['tag'])) {
-                $new_tags  = preg_split('/[,\s]+/', $form_data['tag']);
-                if (count($new_tags)) {
-                    if (!is_array($params['data']['tag'])) {
-                        $params['data']['tag'] = array();
-                    }
-                    $params['data']['tag'] = array_merge($params['data']['tag'], $new_tags);
-                }
+            $new_tags = array();
+            if (isset($form_data['new_tags'])) {
+                $new_tags = preg_split('/[,\s]+/', $form_data['new_tags']);
             }
-
+            if (is_array($form_data['tag'])) {
+                $form_data['tag'] = array_merge($form_data['tag'], $new_tags);
+            } else {
+                $form_data['tag'] = $new_tags;
+            }
+            $params['data']['tag'] = $form_data['tag'];
+            unset($params['data']['new_tags']);
+            */
+            
 			// set created, modified
             $question = $params['data'];
             if (!$question) {

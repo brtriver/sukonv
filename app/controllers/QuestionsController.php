@@ -21,6 +21,10 @@ class QuestionsController extends \lithium\action\Controller {
         $success = false;
 		$mode = 'add';
         if ($this->request->data) {
+            // convert new tags field to tags array
+            $this->request->data['tag'] = preg_split('/[,\s]+/', $this->request->data['new_tags']);
+            unset($this->request->data['new_tags']);
+
             $question = Question::create($this->request->data);
             if ($question->validates()) {
 				//unset($question->_id);
@@ -43,6 +47,11 @@ class QuestionsController extends \lithium\action\Controller {
             $this->redirect(array('controller' => 'questions', 'action' => 'index'));
         }
         if ($this->request->data) {
+            // convert new tags field to tags array
+            $tags = $this->request->data['tag'];
+            $this->request->data['tag'] = array_merge($tags, preg_split('/[,\s]+/', $this->request->data['new_tags']));
+            unset($this->request->data['new_tags']);
+
 			unset($this->request->data['_id']); // The ID that Lithium has is different from MongoDB one.
             if ($success = $question->save($this->request->data)) {
                 $this->redirect(array('controller' => 'questions', 'action' => 'index'));
