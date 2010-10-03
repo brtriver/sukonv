@@ -1,3 +1,5 @@
+
+
 <h3>View Question And Answer</h3>
 <p>
 <?=$this->html->link('Add Answer', 'answers/add/' . $question->_id) ?>
@@ -18,7 +20,8 @@
     <?php foreach ($question->answers->to('array') as $answer): ?>
 	<p class='fw-list'>for <span class='fw'><?php echo implode("</span>,<span class='fw'>", $answer['framework']) ?></span></p>
     <p class='answer-description'><?=$answer['description']; ?></p>
-    <p class='posted-by'>by: XXX</p>
+    <p class='posted-by' style="text-align: left">by: <?=$this->view()->render(array('element' => 'display_user_email'), compact('answer')); ?></p>
+    <p> <?=$this->html->link('like!', sprintf("/votes/like/%s/%s", $question->_id, $answer['_id'])) ?>[<?=$answer['like'] ?>]</p>
     <?php endforeach ?>
 <?php endif ?>
 </div>

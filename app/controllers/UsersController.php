@@ -3,6 +3,7 @@
 namespace app\controllers;
 use app\models\User;
 use lithium\security\Auth;
+use lithium\storage\Session;
 
 class UsersController extends \lithium\action\Controller {
 
@@ -28,6 +29,7 @@ class UsersController extends \lithium\action\Controller {
 		$success = false;
 		if ($this->request->data) {
 			if (Auth::check('default', $this->request)) {
+			    Session::write('user.email', $this->request->data['email']);
 				$this->redirect(array('controller' => 'questions', 'action' => 'index'));
 			} else {
 				$success = false;
@@ -38,8 +40,6 @@ class UsersController extends \lithium\action\Controller {
 	}
 	public function logout() {
 		Auth::clear('default');
-		print_r($_SESSION);
-		exit;
 		$this->redirect(array('controller' => 'users', 'action' => 'login'));
 	}
 

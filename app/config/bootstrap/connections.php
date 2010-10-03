@@ -71,7 +71,7 @@ use lithium\core\Environment;
 
 Connections::add('default', array('type' =>  'MongoDb', 'database' => 'sukonv', 'host' => 'localhost'));
 
-if (!Environment::is('production')) {
+if (Environment::is('production')) {
     Connections::get('default')->
     applyFilter('read', function($self, $params, $chain){
     echo "<pre style='color: red'>";

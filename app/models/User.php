@@ -17,7 +17,7 @@ class User extends \lithium\data\Model {
 		array('notEmpty', 'message' => 'Password is empty.'),
 		),
 	);
-	protected $_filters = array('password' => array('\lithium\util\String', 'hash'));
+//	protected $_filters = array('password' => array('\lithium\util\String', 'hash'));
 	public static function __init(array $options = array()) {
 	    parent::__init($options);
 		// for save

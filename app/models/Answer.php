@@ -5,6 +5,8 @@ namespace app\models;
 use \lithium\util\Validator;
 use \lithium\util\String;
 use app\models\Question;
+use app\models\User;
+use lithium\storage\Session;
 
 class Answer extends \lithium\data\Model {
 	/**
@@ -53,26 +55,25 @@ class Answer extends \lithium\data\Model {
 		// for save
 	    Answer::applyFilter('save', function($self, $params, $chain) {
 			// set created, modified
-            $answer = $params['data'];
-            if (!$answer) {
-                $answer['created'] = date('Y-m-d H:i:s');
-				$answer['parent_id'] = $params['entity']->parent_id;
-				$params['entity']->_id = $answer['_id'] = new \MongoID();
-            } else {
-                $answer['modified'] = date('Y-m-d H:i:s');
-            }
-			$params['data'] = $answer;
             // $chain->next($self, $params, $chain);
 			// set answer document to question.
 			// MEMO: entity ?? data ?? it's changed??
 			$question = Question::find($params['entity']->parent_id);
-			$p = ($params['entity']->to('array'));
-			$ent = ($question->answers)? $question->answers->to('array'): array();
+			// find User by Email
+			$user = User::findByEmail(Session::read('user.email'))->to('array');
+			$params['entity']->user_id = $user['_id'];
+			// set others
+            $params['entity']->created = date('Y-m-d H:i:s');
+			$params['entity']->parent_id = $question->_id;
+			$params['entity']->_id = new \MongoID();
+			$params['entity']->like = 0;
+			$data = ($question->answers)? $question->answers->to('array'): array();
 			// if the answers exist, added to array of answers with merge.
-			if (count($ent)) {
-				$answers = array_merge($ent, array($p['_id'] =>$p));
+			$entity = $params['entity']->to('array');
+			if (count($data)) {
+				$answers = array_merge($data, array($entity['_id'] => $entity));
 			} else {
-				$answers = array($p['_id'] =>$p);
+				$answers = array($entity['_id'] => $entity);
 			}
 			$question->answers = $answers;
 			$question->save();
