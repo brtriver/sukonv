@@ -8,8 +8,8 @@
 
 namespace lithium\console;
 
-use \lithium\core\Libraries;
-use \UnexpectedValueException;
+use lithium\core\Libraries;
+use UnexpectedValueException;
 
 /**
  * The console dispatcher is responsible for accepting requests from scripts called from the command
@@ -28,8 +28,8 @@ class Dispatcher extends \lithium\core\StaticObject {
 	 * @var array
 	 */
 	protected static $_classes = array(
-		'request' => '\lithium\console\Request',
-		'router' => '\lithium\console\Router'
+		'request' => 'lithium\console\Request',
+		'router' => 'lithium\console\Router'
 	);
 
 	/**
@@ -49,8 +49,8 @@ class Dispatcher extends \lithium\core\StaticObject {
 	 * @see lithium\util\String::insert()
 	 */
 	protected static $_rules = array(
-		'command' => array(array('\lithium\util\Inflector', 'camelize')),
-		'action' => array(array('\lithium\util\Inflector', 'camelize', array(false)))
+		'command' => array(array('lithium\util\Inflector', 'camelize')),
+		'action' => array(array('lithium\util\Inflector', 'camelize', array(false)))
 	);
 
 	/**
@@ -89,7 +89,7 @@ class Dispatcher extends \lithium\core\StaticObject {
 		$params = compact('request', 'options');
 		$method = __FUNCTION__;
 
-		return static::_filter($method, $params, function($self, $params, $chain) use ($classes) {
+		return static::_filter($method, $params, function($self, $params) use ($classes) {
 			$request = $params['request'];
 			$options = $params['options'];
 
@@ -114,18 +114,18 @@ class Dispatcher extends \lithium\core\StaticObject {
 	 * @param string $request
 	 * @param string $params
 	 * @param string $options
-	 * @return class \lithium\console\Command
+	 * @return class lithium\console\Command
 	 */
 	protected static function _callable($request, $params, $options) {
 		$params = compact('request', 'params', 'options');
-		return static::_filter(__FUNCTION__, $params, function($self, $params, $chain) {
+		return static::_filter(__FUNCTION__, $params, function($self, $params) {
 			$request = $params['request'];
 			$params = $params['params'];
 			$name = $params['command'];
 
 			if (!$name) {
 				$request->params['args'][0] = $name;
-				$name = '\lithium\console\command\Help';
+				$name = 'lithium\console\command\Help';
 			}
 			if (class_exists($class = Libraries::locate('command', $name))) {
 				return new $class(compact('request'));
@@ -173,7 +173,7 @@ class Dispatcher extends \lithium\core\StaticObject {
 	 */
 	protected static function _call($callable, $request, $params) {
 		$params = compact('callable', 'request', 'params');
-		return static::_filter(__FUNCTION__, $params, function($self, $params, $chain) {
+		return static::_filter(__FUNCTION__, $params, function($self, $params) {
 			if (is_callable($callable = $params['callable'])) {
 				$request = $params['request'];
 				$params = $params['params'];

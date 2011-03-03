@@ -8,9 +8,10 @@
 
 namespace lithium\tests\cases\template;
 
-use \lithium\template\View;
-use \lithium\g11n\catalog\adapter\Memory;
-use \lithium\template\view\adapter\Simple;
+use lithium\template\View;
+use lithium\action\Response;
+use lithium\g11n\catalog\adapter\Memory;
+use lithium\template\view\adapter\Simple;
 
 class TestViewClass extends \lithium\template\View {
 
@@ -34,9 +35,12 @@ class ViewTest extends \lithium\test\Unit {
 		$this->assertEqual($expected, $result);
 	}
 
-	public function testInitializationWithBadClasses() {
+	public function testInitializationWithBadLoader() {
 		$this->expectException("Class 'Badness' of type 'adapter.template.view' not found.");
 		new View(array('loader' => 'Badness'));
+	}
+
+	public function testInitializationWithBadRenderer() {
 		$this->expectException("Class 'Badness' of type 'adapter.template.view' not found.");
 		new View(array('renderer' => 'Badness'));
 	}
@@ -46,6 +50,31 @@ class ViewTest extends \lithium\test\Unit {
 		$expected = '&lt;p&gt;Foo, Bar &amp; Baz&lt;/p&gt;';
 		$result = $h('<p>Foo, Bar & Baz</p>');
 		$this->assertEqual($expected, $result);
+	}
+
+	/**
+	 * Tests that the output-escaping handler correctly inherits its encoding from the `Response`
+	 * object, if provided.
+	 *
+	 * @return void
+	 */
+	public function testEscapeOutputFilterWithInjectedEncoding() {
+		$message = "Multibyte string support must be enabled to test character encodings.";
+		$this->skipIf(!function_exists('mb_convert_encoding'), $message);
+
+		$string = "Joël";
+
+		$response = new Response();
+		$response->encoding = 'UTF-8';
+		$view = new View(compact('response'));
+		$handler = $view->outputFilters['h'];
+		$this->assertTrue(mb_check_encoding($handler($string), "UTF-8"));
+
+		$response = new Response();
+		$response->encoding = 'ISO-8859-1';
+		$view = new View(compact('response'));
+		$handler = $view->outputFilters['h'];
+		$this->assertTrue(mb_check_encoding($handler($string), "ISO-8859-1"));
 	}
 
 	public function testBasicRenderModes() {
@@ -63,6 +92,12 @@ class ViewTest extends \lithium\test\Unit {
 		$expected = "Logged in as: Cap'n Crunch.";
 		$this->assertEqual($expected, $result);
 
+		$result = $view->render('element', array('name' => "Cap'n Crunch"), array(
+			'element' => 'Logged in as: {:name}.'
+		));
+		$expected = "Logged in as: Cap'n Crunch.";
+		$this->assertEqual($expected, $result);
+
 		$xmlHeader = '<' . '?xml version="1.0" ?' . '>' . "\n";
 		$result = $view->render('all', array('type' => 'auth', 'success' => 'true'), array(
 			'layout' => $xmlHeader . "\n{:content}\n",
@@ -70,6 +105,20 @@ class ViewTest extends \lithium\test\Unit {
 		));
 		$expected = "{$xmlHeader}\n<auth>true</auth>\n";
 		$this->assertEqual($expected, $result);
+	}
+
+	public function testTwoStepRenderWithVariableCapture() {
+		$view = new View(array('loader' => 'Simple', 'renderer' => 'Simple'));
+
+		$result = $view->render(
+			array(
+				array('path' => 'element', 'capture' => array('data' => 'foo')),
+				array('path' => 'template')
+			),
+			array('name' => "Cap'n Crunch"),
+			array('element' => 'Logged in as: {:name}.', 'template' => '--{:foo}--')
+		);
+		$this->assertEqual('--Logged in as: Cap\'n Crunch.--', $result);
 	}
 
 	public function testFullRenderNoLayout() {

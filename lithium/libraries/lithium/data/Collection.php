@@ -8,7 +8,7 @@
 
 namespace lithium\data;
 
-use \RuntimeException;
+use RuntimeException;
 
 /**
  * The `Collection` class extends the generic `lithium\util\Collection` class to provide
@@ -23,7 +23,7 @@ abstract class Collection extends \lithium\util\Collection {
 	 *
 	 * @var object
 	 */
-	public $_parent = null;
+	protected $_parent = null;
 
 	/**
 	 * If this `Collection` instance has a parent document (see `$_parent`), this value indicates
@@ -43,16 +43,6 @@ abstract class Collection extends \lithium\util\Collection {
 	protected $_model = null;
 
 	/**
-	 * A reference to the object that originated this entity set; usually an instance of
-	 * `lithium\data\Source` or `lithium\data\source\Database`. Used to load column definitions and
-	 * lazy-load entities.
-	 *
-	 * @see lithium\data\Source
-	 * @var object
-	 */
-	protected $_handle = null;
-
-	/**
 	 * A reference to the query object that originated this entity set; usually an instance of
 	 * `lithium\data\model\Query`.
 	 *
@@ -62,7 +52,7 @@ abstract class Collection extends \lithium\util\Collection {
 	protected $_query = null;
 
 	/**
-	 * A pointer or resource that is used to load entities from the object (`$_handle`) that
+	 * A pointer or resource that is used to load entities from the backend data source that
 	 * originated this collection.
 	 *
 	 * @var resource
@@ -97,14 +87,15 @@ abstract class Collection extends \lithium\util\Collection {
 	 */
 	protected $_hasInitialized = false;
 
+	protected $_schema = array();
+
 	/**
 	 * Holds an array of values that should be processed on initialization.
 	 *
 	 * @var array
 	 */
 	protected $_autoConfig = array(
-		'data', 'classes' => 'merge', 'handle', 'model',
-		'result', 'query', 'parent', 'stats', 'pathKey'
+		'data', 'model', 'result', 'query', 'parent', 'stats', 'pathKey'
 	);
 
 	/**
@@ -114,15 +105,23 @@ abstract class Collection extends \lithium\util\Collection {
 	 * @return void
 	 */
 	public function __construct(array $config = array()) {
-		$defaults = array('data' => array(), 'handle' => null, 'model' => null);
+		$defaults = array('data' => array(), 'model' => null);
 		parent::__construct($config + $defaults);
+	}
 
-		foreach (array('data', 'classes', 'handle', 'model', 'result', 'query') as $key) {
+	protected function _init() {
+		parent::_init();
+
+		foreach (array('data', 'classes', 'model', 'result', 'query') as $key) {
 			unset($this->_config[$key]);
 		}
-		if (!is_array($this->_data)) {
-			$message = 'Error creating new Collection instance; data format invalid.';
-			throw new RuntimeException($message);
+		if ($model = $this->_model) {
+			$options = array(
+				'pathKey' => $this->_pathKey,
+				'schema' => $model::schema(),
+				'exists' => isset($this->_config['exists']) ? $this->_config['exists'] : null
+			);
+			$this->_data = $model::connection()->cast($this, $this->_data, $options);
 		}
 	}
 
@@ -147,6 +146,23 @@ abstract class Collection extends \lithium\util\Collection {
 	 */
 	public function model() {
 		return $this->_model;
+	}
+
+	public function schema($field = null) {
+		$schema = array();
+
+		switch (true) {
+			case ($this->_schema):
+				$schema = $this->_schema;
+			break;
+			case ($model = $this->_model):
+				$schema = $model::schema();
+			break;
+		}
+		if ($field) {
+			return isset($self->_schema[$field]) ? $self->_schema[$field] : null;
+		}
+		return $schema;
 	}
 
 	/**
@@ -214,14 +230,24 @@ abstract class Collection extends \lithium\util\Collection {
 	 * @param callback $filter The filter to apply.
 	 * @param array $options The available options are:
 	 *              - `'collect'`: If `true`, the results will be returned wrapped
-	 *              in a new Collection object or subclass.
+	 *              in a new `Collection` object or subclass.
 	 * @return array|object The filtered data.
 	 */
 	public function map($filter, array $options = array()) {
+		$defaults = array('collect' => true);
+		$options += $defaults;
+
 		if (!$this->closed()) {
 			while($this->next()) {}
 		}
-		return parent::map($filter, $options);
+		$data = parent::map($filter, $options);
+
+		if ($options['collect']) {
+			foreach (array('_model', '_schema', '_pathKey') as $key) {
+				$data->{$key} = $this->{$key};
+			}
+		}
+		return $data;
 	}
 
 	/**
@@ -242,10 +268,9 @@ abstract class Collection extends \lithium\util\Collection {
 	 * @return mixed Returns the set `Entity` object.
 	 */
 	public function offsetSet($offset, $data) {
-		if (is_array($data)) {
-			$class = $this->_classes['entity'];
-			$data = new $class(compact('data'));
-		} else {
+		if (is_array($data) && ($model = $this->_model)) {
+			$data = $model::connection()->cast($this, $data);
+		} elseif (is_object($data)) {
 			$data->assignTo($this);
 		}
 		return $this->_data[] = $data;
@@ -272,9 +297,8 @@ abstract class Collection extends \lithium\util\Collection {
 	 * @return void
 	 */
 	public function close() {
-		if (!$this->closed()) {
-			$this->_result = $this->_handle->result('close', $this->_result, $this);
-			unset($this->_handle);
+		if (!empty($this->_result)) {
+			$this->_result = null;
 		}
 	}
 
@@ -286,7 +310,7 @@ abstract class Collection extends \lithium\util\Collection {
 	 *         freed, otherwise returns false.
 	 */
 	public function closed() {
-		return (empty($this->_result) && (!isset($this->_handle) || empty($this->_handle)));
+		return empty($this->_result);
 	}
 
 	/**
@@ -300,9 +324,9 @@ abstract class Collection extends \lithium\util\Collection {
 
 	/**
 	 * A method to be implemented by concrete `Collection` classes which, provided a reference to a
-	 * backend data source (see the `$_handle` property), and a resource representing a query result
-	 * cursor, fetches new result data and wraps it in the appropriate object type, which is added
-	 * into the `Collection` and returned.
+	 * backend data source, and a resource representing a query result cursor, fetches new result
+	 * data and wraps it in the appropriate object type, which is added into the `Collection` and
+	 * returned.
 	 *
 	 * @param mixed $data Data (in an array or object) that is manually added to the data
 	 *              collection. If `null`, data is automatically fetched from the associated backend

@@ -8,8 +8,9 @@
 
 namespace lithium\data\model;
 
-use \lithium\core\Libraries;
-use \lithium\util\Inflector;
+use lithium\core\Libraries;
+use lithium\util\Inflector;
+use lithium\core\ClassNotFoundException;
 
 /**
  * The `Relationship` class encapsulates the data and functionality necessary to link two model
@@ -57,7 +58,7 @@ class Relationship extends \lithium\core\Object {
 			'link' => self::LINK_KEY,
 			'fields' => true,
 			'fieldName' => null,
-			'conditions' => null,
+			'constraint' => array(),
 		);
 		parent::__construct($config + $defaults);
 	}
@@ -96,7 +97,10 @@ class Relationship extends \lithium\core\Object {
 		if (!($related = ($config['type'] == 'belongsTo') ? $config['to'] : $config['from'])) {
 			return array();
 		}
-		return array_combine((array) $keys, (array) $related::key());
+		if (class_exists($related)) {
+			return array_combine((array) $keys, (array) $related::key());
+		}
+		throw new ClassNotFoundException("Related model class '{$related}' not found.");
 	}
 }
 

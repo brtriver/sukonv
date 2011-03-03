@@ -8,16 +8,16 @@
 
 namespace lithium\tests\cases\data\source;
 
-use \lithium\data\source\Http;
-use \lithium\data\Connections;
-use \lithium\data\model\Query;
+use lithium\data\source\Http;
+use lithium\data\Connections;
+use lithium\data\model\Query;
 
 class HttpTest extends \lithium\test\Unit {
 
+	protected $_model = 'lithium\tests\mocks\data\source\MockHttpModel';
+
 	protected $_testConfig = array(
-		'classes' => array(
-			'socket' => '\lithium\tests\mocks\data\source\http\adapter\MockSocket'
-		),
+		'classes' => array('response' => 'lithium\net\http\Response'),
 		'persistent' => false,
 		'protocol' => 'tcp',
 		'host' => 'localhost',
@@ -25,6 +25,7 @@ class HttpTest extends \lithium\test\Unit {
 		'password' => '',
 		'port' => 80,
 		'timeout' => 2,
+		'socket' => 'lithium\tests\mocks\data\source\http\adapter\MockSocket'
 	);
 
 	public function setUp() {
@@ -32,9 +33,7 @@ class HttpTest extends \lithium\test\Unit {
 		Connections::reset();
 
 		Connections::config(array(
-			'mock-http-connection' => array(
-				'type' => 'Http',
-			)
+			'mock-http-connection' => array('type' => 'Http')
 		));
 
 		Connections::config(array(
@@ -55,7 +54,7 @@ class HttpTest extends \lithium\test\Unit {
 	}
 
 	public function testAllMethodsNoConnection() {
-		$http = new Http(array('classes' => array('socket' => false)));
+		$http = new Http(array('socket' => false));
 		$this->assertTrue($http->connect());
 		$this->assertTrue($http->disconnect());
 		$this->assertFalse($http->get());
@@ -92,25 +91,20 @@ class HttpTest extends \lithium\test\Unit {
 		$http = new Http($this->_testConfig);
 		$result = $http->get();
 
-		$expected = 'HTTP/1.1';
 		$result = $http->last->response->protocol;
-		$this->assertEqual($expected, $result);
+		$this->assertEqual('HTTP/1.1', $result);
 
-		$expected = '200';
 		$result = $http->last->response->status['code'];
-		$this->assertEqual($expected, $result);
+		$this->assertEqual('200', $result);
 
-		$expected = 'OK';
 		$result = $http->last->response->status['message'];
-		$this->assertEqual($expected, $result);
+		$this->assertEqual('OK', $result);
 
-		$expected = 'text/html';
 		$result = $http->last->response->type;
-		$this->assertEqual($expected, $result);
+		$this->assertEqual('text/html', $result);
 
-		$expected = 'UTF-8';
 		$result = $http->last->response->encoding;
-		$this->assertEqual($expected, $result);
+		$this->assertEqual('UTF-8', $result);
 	}
 
 	public function testGetPath() {
@@ -221,11 +215,10 @@ class HttpTest extends \lithium\test\Unit {
 		$this->assertEqual($expected, $result);
 	}
 
-
 	public function testCreateWithModel() {
 		$http = new Http($this->_testConfig);
 		$query = new Query(array(
-			'model' => '\lithium\tests\mocks\data\source\MockHttpModel',
+			'model' => $this->_model,
 			'data' => array('title' => 'Test Title')
 		));
 
@@ -245,9 +238,7 @@ class HttpTest extends \lithium\test\Unit {
 
 	public function testReadWithModel() {
 		$http = new Http($this->_testConfig);
-		$query = new Query(array(
-			'model' => '\lithium\tests\mocks\data\source\MockHttpModel',
-		));
+		$query = new Query(array('model' => $this->_model));
 
 		$result = $http->read($query);
 		$expected = join("\r\n", array(
@@ -264,7 +255,7 @@ class HttpTest extends \lithium\test\Unit {
 	public function testReadWithModelConditions() {
 		$http = new Http($this->_testConfig);
 		$query = new Query(array(
-			'model' => '\lithium\tests\mocks\data\source\MockHttpModel',
+			'model' => $this->_model,
 			'conditions' => array('page' => 2)
 		));
 
@@ -284,7 +275,7 @@ class HttpTest extends \lithium\test\Unit {
 	public function testUpdateWithModel() {
 		$http = new Http($this->_testConfig);
 		$query = new Query(array(
-			'model' => '\lithium\tests\mocks\data\source\MockHttpModel',
+			'model' => $this->_model,
 			'data' => array('id' => '1', 'title' => 'Test Title')
 		));
 
@@ -304,10 +295,7 @@ class HttpTest extends \lithium\test\Unit {
 
 	public function testDeleteWithModel() {
 		$http = new Http($this->_testConfig);
-		$query = new Query(array(
-			'model' => '\lithium\tests\mocks\data\source\MockHttpModel',
-			'data' => array('id' => '1')
-		));
+		$query = new Query(array('model' => $this->_model, 'data' => array('id' => '1')));
 
 		$result = $http->delete($query);
 		$expected = join("\r\n", array(

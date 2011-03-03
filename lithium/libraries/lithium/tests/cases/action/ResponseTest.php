@@ -8,9 +8,9 @@
 
 namespace lithium\tests\cases\action;
 
-use \lithium\action\Response;
-use \lithium\tests\mocks\action\MockRequestType;
-use \lithium\tests\mocks\action\MockResponse;
+use lithium\action\Response;
+use lithium\tests\mocks\action\MockRequestType;
+use lithium\tests\mocks\action\MockResponse;
 
 class ResponseTest extends \lithium\test\Unit {
 
@@ -18,11 +18,6 @@ class ResponseTest extends \lithium\test\Unit {
 
 	public function setUp() {
 		$this->response = new MockResponse(array('init' => false));
-	}
-
-	public function testDefaultTypeInitialization() {
-		$response = new Response(array('request' => new MockRequestType()));
-		$this->assertEqual('foo', $response->type());
 	}
 
 	public function testTypeManipulation() {
@@ -49,9 +44,35 @@ class ResponseTest extends \lithium\test\Unit {
 		$this->assertEqual('Document body', $result);
 		$this->assertEqual(array('HTTP/1.1 200 OK'), $this->response->testHeaders);
 
+		$expires = strtotime('+1 hour');
+		$this->response->cache($expires);
+		ob_start();
+		$this->response->render();
+		$result = ob_get_clean();
+		$headers = array (
+			'HTTP/1.1 200 OK',
+			'Expires: ' . gmdate('D, d M Y H:i:s', $expires) . ' GMT',
+			'Cache-Control: max-age=' . ($expires - time()),
+			'Pragma: cache'
+		);
+		$this->assertEqual($headers, $this->response->testHeaders);
+
+		$expires = '+2 hours';
+		$this->response->cache($expires);
+		ob_start();
+		$this->response->render();
+		$result = ob_get_clean();
+		$headers = array (
+			'HTTP/1.1 200 OK',
+			'Expires: ' . gmdate('D, d M Y H:i:s', strtotime($expires)) . ' GMT',
+			'Cache-Control: max-age=' . (strtotime($expires) - time()),
+			'Pragma: cache'
+		);
+		$this->assertEqual($headers, $this->response->testHeaders);
+
 		$this->response->body = 'Created';
 		$this->response->status(201);
-		$this->response->disableCache();
+		$this->response->cache(false);
 
 		ob_start();
 		$this->response->render();
@@ -61,14 +82,17 @@ class ResponseTest extends \lithium\test\Unit {
 		$headers = array (
 			'HTTP/1.1 201 Created',
 			'Expires: Mon, 26 Jul 1997 05:00:00 GMT',
-			'Last-Modified: ' . gmdate("D, d M Y H:i:s") . ' GMT',
 			array(
 				'Cache-Control: no-store, no-cache, must-revalidate',
-				'Cache-Control: post-check=0, pre-check=0'
+				'Cache-Control: post-check=0, pre-check=0',
+				'Cache-Control: max-age=0'
 			),
 			'Pragma: no-cache'
 		);
 		$this->assertEqual($headers, $this->response->testHeaders);
+
+		$this->expectException('/^Request::disableCache\(\)/');
+		$this->response->disableCache();
 	}
 
 	/**

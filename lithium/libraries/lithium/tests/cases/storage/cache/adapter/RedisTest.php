@@ -8,7 +8,7 @@
 
 namespace lithium\tests\cases\storage\cache\adapter;
 
-use \lithium\storage\cache\adapter\Redis;
+use lithium\storage\cache\adapter\Redis;
 
 class RedisTest extends \lithium\test\Unit {
 
@@ -323,9 +323,10 @@ class RedisTest extends \lithium\test\Unit {
 
 		$params = compact('key');
 		$result = $closure($this->Redis, $params, null);
+		$this->assertFalse($result);
 
 		$result = $this->_Redis->get($key);
-		$this->assertEqual(-1, $result);
+		$this->assertEqual($value, $result);
 
 		$result = $this->_Redis->delete($key);
 		$this->assertTrue($result);
@@ -364,9 +365,10 @@ class RedisTest extends \lithium\test\Unit {
 
 		$params = compact('key');
 		$result = $closure($this->Redis, $params, null);
+		$this->assertFalse($result);
 
 		$result = $this->_Redis->get($key);
-		$this->assertEqual(1, $result);
+		$this->assertEqual($value, $result);
 
 		$result = $this->_Redis->delete($key);
 		$this->assertTrue($result);

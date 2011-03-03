@@ -8,10 +8,10 @@
 
 namespace lithium\test\filter;
 
-use \lithium\core\Libraries;
-use \lithium\util\String;
-use \lithium\util\Collection;
-use \lithium\analysis\Inspector;
+use lithium\core\Libraries;
+use lithium\util\String;
+use lithium\util\Collection;
+use lithium\analysis\Inspector;
 
 /**
  * Runs code coverage analysis for the executed tests.
@@ -72,7 +72,7 @@ class Coverage extends \lithium\test\Filter {
 		}
 		$executableLines = array();
 
-		if (!empty($classes)) {
+		if ($classes) {
 			$executableLines = array_combine($classes, array_map(
 				function($cls) { return Inspector::executable($cls, array('public' => false)); },
 				$classes
@@ -204,9 +204,7 @@ class Coverage extends \lithium\test\Filter {
 
 		foreach ($runs as $run) {
 			foreach ($run as $file => $coverage) {
-				$file = str_replace('\\', '/', $file);
-
-				if (!empty($classMap)) {
+				if ($classMap) {
 					if (!$class = array_search($file, $classMap)) {
 						continue;
 					}

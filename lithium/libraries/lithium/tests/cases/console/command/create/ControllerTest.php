@@ -8,9 +8,9 @@
 
 namespace lithium\tests\cases\console\command\create;
 
-use \lithium\console\command\create\Controller;
-use \lithium\console\Request;
-use \lithium\core\Libraries;
+use lithium\console\command\create\Controller;
+use lithium\console\Request;
+use lithium\core\Libraries;
 
 class ControllerTest extends \lithium\test\Unit {
 
@@ -26,7 +26,7 @@ class ControllerTest extends \lithium\test\Unit {
 	}
 
 	public function setUp() {
-		$this->classes = array('response' => '\lithium\tests\mocks\console\MockResponse');
+		$this->classes = array('response' => 'lithium\tests\mocks\console\MockResponse');
 		$this->_backup['cwd'] = getcwd();
 		$this->_backup['_SERVER'] = $_SERVER;
 		$_SERVER['argv'] = array();
@@ -70,8 +70,8 @@ class ControllerTest extends \lithium\test\Unit {
 
 	public function testRun() {
 		$this->request->params += array(
-			'command' => 'create', 'action' => 'run',
-			'args' => array('controller', 'Posts')
+			'command' => 'create', 'action' => 'controller',
+			'args' => array('Posts')
 		);
 		$controller = new Controller(array(
 			'request' => $this->request, 'classes' => $this->classes

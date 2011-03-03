@@ -8,10 +8,10 @@
 
 namespace lithium\tests\cases\storage;
 
-use \lithium\storage\Session;
-use \lithium\util\Collection;
-use \lithium\storage\session\adapter\Memory;
-use \lithium\tests\mocks\storage\session\adapter\SessionStorageConditional;
+use lithium\storage\Session;
+use lithium\util\Collection;
+use lithium\storage\session\adapter\Memory;
+use lithium\tests\mocks\storage\session\adapter\SessionStorageConditional;
 
 
 /**
@@ -166,7 +166,7 @@ class SessionTest extends \lithium\test\Unit {
 
 	/**
 	 * Tests querying session keys from the primary adapter.
-	 * The memory adapter returns a UUID based on a server variable for portability.
+	 * The memory adapter returns a UUID.
 	 *
 	 * @return void
 	 */
@@ -202,6 +202,49 @@ class SessionTest extends \lithium\test\Unit {
 		Session::reset();
 		$this->expectException("Configuration 'default' has not been defined.");
 		$this->assertFalse(Session::isStarted('default'));
+	}
+
+	public function testReadFilter() {
+		Session::config(array(
+			'primary' => array('adapter' => new Memory(), 'filters' => array()),
+			'secondary' => array('adapter' => new Memory(), 'filters' => array())
+		));
+		Session::applyFilter('read', function($self, $params, $chain) {
+			$result = $chain->next($self, $params, $chain);
+
+			if (isset($params['options']['increment'])) {
+				$result += $params['options']['increment'];
+			}
+			return $result;
+		});
+		Session::write('foo', 'bar');
+		$this->assertEqual('bar', Session::read('foo'));
+
+		Session::write('bar', 1);
+		$this->assertEqual(2, Session::read('bar', array('increment' => 1)));
+	}
+
+	public function testStrategies() {
+		Session::config(array('primary' => array(
+			'adapter' => new Memory(), 'filters' => array(), 'strategies' => array(
+				'lithium\storage\cache\strategy\Json'
+			)
+		)));
+
+		Session::write('test', array('foo' => 'bar'));
+		$this->assertEqual(array('foo' => 'bar'), Session::read('test'));
+
+		$this->assertTrue(Session::check('test'));
+		$this->assertTrue(Session::check('test', array('strategies' => false)));
+
+		$result = Session::read('test', array('strategies' => false));
+		$this->assertEqual('{"foo":"bar"}', $result);
+
+		$result = Session::clear(array('strategies' => false));
+		$this->assertNull(Session::read('test'));
+
+		$this->assertFalse(Session::check('test'));
+		$this->assertFalse(Session::check('test', array('strategies' => false)));
 	}
 }
 

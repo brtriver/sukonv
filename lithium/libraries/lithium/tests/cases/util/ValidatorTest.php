@@ -8,7 +8,7 @@
 
 namespace lithium\tests\cases\util;
 
-use \lithium\util\Validator;
+use lithium\util\Validator;
 
 class ValidatorTest extends \lithium\test\Unit {
 
@@ -107,6 +107,7 @@ class ValidatorTest extends \lithium\test\Unit {
 		$this->assertTrue(Validator::isUuid('1c0a5831-6025-11de-8a39-0800200c9a66'));
 		$this->assertTrue(Validator::isUuid('1c0a5832-6025-11de-8a39-0800200c9a66'));
 		$this->assertFalse(Validator::isUuid('zc0a5832-6025-11de-8a39-0800200c9a66'));
+		$this->assertFalse(Validator::isUuid('1-1c0a5832-6025-11de-8a39-0800200c9a66'));
 	}
 
 	/**
@@ -364,6 +365,8 @@ class ValidatorTest extends \lithium\test\Unit {
 	 * @return void
 	 */
 	public function testEmailDomainCheck() {
+		$this->skipIf(dns_check_record("google.com") === false, "No internet connection.");
+
 		$this->assertTrue(Validator::isEmail('abc.efg@rad-dev.org', null, array('deep' => true)));
 		$this->assertFalse(Validator::isEmail('abc.efg@invalidfoo.com', null, array(
 			'deep' => true
@@ -1030,6 +1033,41 @@ class ValidatorTest extends \lithium\test\Unit {
 			array('title' => array('someModelRule'))
 		);
 		$this->assertIdentical(array('title' => array(0)), $result);
+	}
+
+	/**
+	 * Tests that event flags applied to rules only trigger when the corresponding event is passed
+	 * in the `$options` parameter of `check()`.
+	 *
+	 * @return void
+	 */
+	public function testEvents() {
+		$rules = array('number' => array('numeric', 'message' => 'Badness!'));
+		$expected = array('number' => array('Badness!'));
+
+		$result = Validator::check(array('number' => 'o'), $rules);
+		$this->assertEqual($expected, $result);
+
+		$rules['number']['on'] = 'foo';
+		$result = Validator::check(array('number' => 'o'), $rules, array('events' => 'foo'));
+		$this->assertEqual($expected, $result);
+
+		$result = Validator::check(array('number' => 'o'), $rules, array('events' => 'bar'));
+		$this->assertEqual(array(), $result);
+
+		$result = Validator::check(array('number' => 'o'), $rules, array(
+			'events' => array('foo', 'bar')
+		));
+		$this->assertEqual($expected, $result);
+
+		$result = Validator::check(array('number' => 'o'), $rules, array(
+			'events' => array('bar', 'baz')
+		));
+		$this->assertEqual(array(), $result);
+
+		unset($rules['number']['on']);
+		$result = Validator::check(array('number' => 'o'), $rules, array('events' => 'foo'));
+		$this->assertEqual($expected, $result);
 	}
 }
 

@@ -8,8 +8,8 @@
 
 namespace lithium\storage;
 
-use \lithium\core\Libraries;
-use \lithium\util\Collection;
+use lithium\core\Libraries;
+use lithium\util\Collection;
 
 /**
  * The `Session` static class provides a consistent interface to configure and utilize the
@@ -113,7 +113,7 @@ class Session extends \lithium\core\Adaptable {
 				return null;
 			}
 		}
-		$filters = $settings['filters'];
+		$filters = $settings['filters'] ?: array();
 		$result = static::_filter(__FUNCTION__, compact('key', 'options'), $method, $filters);
 
 		if ($options['strategies']) {

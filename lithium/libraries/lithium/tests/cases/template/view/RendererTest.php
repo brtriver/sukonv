@@ -8,13 +8,13 @@
 
 namespace lithium\tests\cases\template\view;
 
-use \lithium\template\View;
-use \lithium\action\Request;
-use \lithium\template\Helper;
-use \lithium\template\helper\Html;
-use \lithium\template\view\adapter\Simple;
-use \lithium\net\http\Router;
-use \stdClass;
+use lithium\template\View;
+use lithium\action\Request;
+use lithium\template\Helper;
+use lithium\template\helper\Html;
+use lithium\template\view\adapter\Simple;
+use lithium\net\http\Router;
+use stdClass;
 
 class RendererTest extends \lithium\test\Unit {
 
@@ -22,7 +22,9 @@ class RendererTest extends \lithium\test\Unit {
 		$this->_routes = Router::get();
 		Router::reset();
 		Router::connect('/{:controller}/{:action}');
-		$this->subject = new Simple();
+		$this->subject = new Simple(array('request' => new Request(array(
+			'base' => '', 'env' => array('HTTP_HOST' => 'foo.local')
+		))));
 	}
 
 	public function tearDown() {
@@ -33,18 +35,21 @@ class RendererTest extends \lithium\test\Unit {
 	}
 
 	public function testInitialization() {
-		$expected = array('url', 'path', 'options', 'content', 'title', 'scripts', 'styles');
+		$expected = array(
+			'url', 'path', 'options', 'content', 'title', 'scripts', 'styles', 'head'
+		);
 		$result = array_keys($this->subject->handlers());
 		$this->assertEqual($expected, $result);
 
-		$expected = array('content', 'title', 'scripts', 'styles');
+		$expected = array('content', 'title', 'scripts', 'styles', 'head');
 		$result = array_keys($this->subject->context());
 		$this->assertEqual($expected, $result);
 	}
 
 	public function testContextQuerying() {
 		$expected = array(
-			'content' => '', 'title' => '', 'scripts' => array(), 'styles' => array()
+			'content' => '', 'title' => '', 'scripts' => array(),
+			'styles' => array(), 'head' => array()
 		);
 		$this->assertEqual($expected, $this->subject->context());
 		$this->assertEqual('', $this->subject->context('title'));
@@ -77,6 +82,7 @@ class RendererTest extends \lithium\test\Unit {
 		$class = get_class($helper);
 		$path = $this->subject->applyHandler($helper, "{$class}::script", 'path', 'foo/file');
 		$this->assertEqual('/js/foo/file.js', $path);
+		$this->assertEqual('/some/generic/path', $this->subject->path('some/generic/path'));
 	}
 
 	public function testHandlerInsertion() {
@@ -87,7 +93,7 @@ class RendererTest extends \lithium\test\Unit {
 		$foo = function($value) { return "Foo: {$value}"; };
 
 		$expected = array(
-			'url', 'path', 'options', 'content', 'title', 'scripts', 'styles', 'foo'
+			'url', 'path', 'options', 'content', 'title', 'scripts', 'styles', 'head', 'foo'
 		);
 		$result = array_keys($this->subject->handlers(compact('foo')));
 		$this->assertEqual($expected, $result);
@@ -174,9 +180,9 @@ class RendererTest extends \lithium\test\Unit {
 	}
 
 	public function testGetters() {
-		$this->assertNull($this->subject->request());
-		$this->subject = new Simple(array('request' => new Request()));
 		$this->assertTrue($this->subject->request() instanceof Request);
+		$this->subject = new Simple();
+		$this->assertNull($this->subject->request());
 	}
 
 	public function testSetAndData() {
@@ -200,6 +206,32 @@ class RendererTest extends \lithium\test\Unit {
 	public function testView() {
 		$result = $this->subject->view();
 		$this->assertNull($result);
+	}
+
+	public function testHandlers() {
+		$this->assertTrue($this->subject->url());
+		$this->assertPattern('/\/posts\/foo/', $this->subject->url('Posts::foo'));
+
+		$absolute = $this->subject->url('Posts::foo', array('absolute' => true));
+		$this->assertEqual('http://foo.local/posts/foo', $absolute);
+
+		$this->assertFalse(trim($this->subject->scripts()));
+		$this->assertEqual('foobar', trim($this->subject->scripts('foobar')));
+		$this->assertEqual('foobar', trim($this->subject->scripts()));
+
+		$this->assertFalse(trim($this->subject->styles()));
+		$this->assertEqual('foobar', trim($this->subject->styles('foobar')));
+		$this->assertEqual('foobar', trim($this->subject->styles()));
+
+		$this->assertFalse($this->subject->title());
+		$this->assertEqual('Foo', $this->subject->title('Foo'));
+		$this->assertEqual('Bar', $this->subject->title('Bar'));
+		$this->assertEqual('Bar', $this->subject->title());
+
+		$this->assertFalse(trim($this->subject->head()));
+		$this->assertEqual('foo', trim($this->subject->head('foo')));
+		$this->assertEqual("foo\n\tbar", trim($this->subject->head('bar')));
+		$this->assertEqual("foo\n\tbar", trim($this->subject->head()));
 	}
 }
 

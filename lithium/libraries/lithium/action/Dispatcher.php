@@ -8,10 +8,11 @@
 
 namespace lithium\action;
 
-use \lithium\util\String;
-use \lithium\util\Inflector;
-use \lithium\core\Libraries;
-use \lithium\action\DispatchException;
+use lithium\util\String;
+use lithium\util\Inflector;
+use lithium\core\Libraries;
+use lithium\action\DispatchException;
+use lithium\core\ClassNotFoundException;
 
 /**
  * `Dispatcher` is the outermost layer of the framework, responsible for both receiving the initial
@@ -40,7 +41,7 @@ class Dispatcher extends \lithium\core\StaticObject {
 	 * @var array
 	 */
 	protected static $_classes = array(
-		'router' => '\lithium\net\http\Router'
+		'router' => 'lithium\net\http\Router'
 	);
 
 	/**
@@ -75,7 +76,7 @@ class Dispatcher extends \lithium\core\StaticObject {
 	 *         configuration, otherwise returns `null`.
 	 */
 	public static function config(array $config = array()) {
-		if (empty($config)) {
+		if (!$config) {
 			return array('rules' => static::$_rules);
 		}
 
@@ -131,39 +132,46 @@ class Dispatcher extends \lithium\core\StaticObject {
 	 * @param array $params An array of route parameters to which rules will be applied.
 	 * @return array Returns the `$params` array with formatting rules applied to array values.
 	 */
-	public static function applyRules($params) {
+	public static function applyRules(&$params) {
 		$result = array();
+		$values = array();
 
 		if (!$params) {
 			return false;
 		}
+
 		if (isset($params['controller']) && is_string($params['controller'])) {
 			$controller = $params['controller'];
 
 			if (strpos($controller, '.') !== false) {
 				list($library, $controller) = explode('.', $controller);
 				$controller = $library . '.' . Inflector::camelize($controller);
+				$params += compact('library');
 			} elseif (strpos($controller, '\\') === false) {
 				$controller = Inflector::camelize($controller);
+
+				if (isset($params['library'])) {
+					$controller = "{$params['library']}.{$controller}";
+				}
 			}
-			$params['controller'] = $controller;
+			$values = compact('controller');
 		}
+		$values += $params;
 
 		foreach (static::$_rules as $rule => $value) {
 			foreach ($value as $k => $v) {
-				if (!empty($params[$rule])) {
-					$result[$k] = String::insert($v, $params);
+				if (isset($values[$rule])) {
+					$result[$k] = String::insert($v, $values);
 				}
-
 				$match = preg_replace('/\{:\w+\}/', '@', $v);
 				$match = preg_replace('/@/', '.+', preg_quote($match, '/'));
 
-				if (preg_match('/' . $match . '/i', $params[$k])) {
+				if (preg_match('/' . $match . '/i', $values[$k])) {
 					return false;
 				}
 			}
 		}
-		return $result + array_diff_key($params, $result);
+		return $result + $values;
 	}
 
 	/**
@@ -179,22 +187,22 @@ class Dispatcher extends \lithium\core\StaticObject {
 	 */
 	protected static function _callable($request, $params, $options) {
 		$params = compact('request', 'params', 'options');
-		return static::_filter(__FUNCTION__, $params, function($self, $params, $chain) {
-			$request = $params['request'];
-			$options = $params['options'];
-			$params = $params['params'];
-			$class = Libraries::locate('controllers', $params['controller']);
 
-			if (class_exists($class)) {
-				return new $class(compact('request'));
+		return static::_filter(__FUNCTION__, $params, function($self, $params) {
+			$options = array('request' => $params['request']) + $params['options'];
+			$controller = $params['params']['controller'];
+
+			try {
+				return Libraries::instance('controllers', $controller, $options);
+			} catch (ClassNotFoundException $e) {
+				throw new DispatchException("Controller '{$controller}' not found", null, $e);
 			}
-			throw new DispatchException("Controller '{$params['controller']}' not found");
 		});
 	}
 
 	protected static function _call($callable, $request, $params) {
 		$params = compact('callable', 'request', 'params');
-		return static::_filter(__FUNCTION__, $params, function($self, $params, $chain) {
+		return static::_filter(__FUNCTION__, $params, function($self, $params) {
 			if (is_callable($callable = $params['callable'])) {
 				return $callable($params['request'], $params['params']);
 			}

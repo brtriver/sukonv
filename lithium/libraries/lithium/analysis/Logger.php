@@ -65,6 +65,11 @@ class Logger extends \lithium\core\Adaptable {
 	 */
 	protected static $_adapters = 'adapter.analysis.logger';
 
+	/**
+	 * An array of valid message priorities.
+	 *
+	 * @var array
+	 */
 	protected static $_priorities = array(
 		'emergency' => 0,
 		'alert'     => 1,
@@ -109,7 +114,7 @@ class Logger extends \lithium\core\Adaptable {
 		foreach ($methods as $name => $method) {
 			$params = compact('priority', 'message', 'options');
 			$config = static::_config($name);
-			$result = $result && static::_filter(__METHOD__, $params, $method, $config['filters']);
+			$result = $result && static::_filter(__FUNCTION__, $params, $method, $config['filters']);
 		}
 		return $methods ? $result : false;
 	}

@@ -8,11 +8,11 @@
 
 namespace lithium\data\source;
 
-use \lithium\core\Libraries;
-use \lithium\util\String;
+use lithium\core\Libraries;
+use lithium\util\String;
 
 /**
- * Http class to access data sources using \lithium\net\http\Service.
+ * Http class to access data sources using `lithium\net\http\Service`.
  */
 class Http extends \lithium\data\Source {
 
@@ -37,8 +37,8 @@ class Http extends \lithium\data\Source {
 	 * @var array
 	 */
 	protected $_classes = array(
-		'service' => '\lithium\net\http\Service',
-		'relationship' => '\lithium\data\model\Relationship'
+		'service' => 'lithium\net\http\Service',
+		'relationship' => 'lithium\data\model\Relationship'
 	);
 
 	/**
@@ -78,9 +78,9 @@ class Http extends \lithium\data\Source {
 			'password'   => '',
 			'port'       => 80,
 			'timeout'    => 30,
-			'encoding'   => 'UTF-8'
+			'encoding'   => 'UTF-8',
 		);
-		$config = (array) $config + $defaults;
+		$config = $config + $defaults;
 		$config['username'] = $config['login'];
 		parent::__construct($config);
 	}
@@ -183,24 +183,25 @@ class Http extends \lithium\data\Source {
 	 */
 	public function create($query, array $options = array()) {
 		$params = compact('query', 'options');
-		$conn =& $this->connection;
 		$config = $this->_config;
 
 		if (!isset($this->_methods[__FUNCTION__])) {
 			return null;
 		}
 		$method = $this->_methods[__FUNCTION__];
-		$filter = function($self, $params) use (&$conn, $config, $method) {
+		$filter = function($self, $params) use ($config, $method) {
 			$query = $params['query'];
 			$options = $params['options'];
 			$data = array();
 
 			if ($query) {
-				$options += $query->export($self);
+				$options += array_filter($query->export($self), function($v) {
+					return $v !== null;
+				});
 				$data = $query->data();
 			}
 			$path = String::insert($method['path'], $options, array('clean' => true));
-			return $conn->{$method['method']}($path, $data, $options);
+			return $self->connection->{$method['method']}($path, $data, $options);
 		};
 		return $this->_filter(__METHOD__, $params, $filter);
 	}
@@ -224,9 +225,13 @@ class Http extends \lithium\data\Source {
 			$query = $params['query'];
 			$options = $params['options'];
 			$data = array();
+			$defaults = array('conditions' => null, 'limit' => null);
 
 			if ($query) {
-				$options += $query->export($self);
+				$options += array_filter($query->export($self), function($v) {
+					return $v !== null;
+				});
+				$options += $defaults;
 				$data = (array) $options['conditions'] + (array) $options['limit'];
 			}
 			$path = String::insert($method['path'], $options, array('clean' => true));
@@ -256,7 +261,9 @@ class Http extends \lithium\data\Source {
 			$data = array();
 
 			if ($query) {
-				$options += $query->export($self);
+				$options += array_filter($query->export($self), function($v) {
+					return $v !== null;
+				});
 				$data = $query->data();
 			}
 			$path = String::insert($method['path'], $options + $data, array('clean' => true));

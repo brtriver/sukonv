@@ -8,7 +8,7 @@
 
 namespace lithium\tests\mocks\data;
 
-use \lithium\util\Inflector;
+use lithium\util\Inflector;
 
 class MockSource extends \lithium\data\Source {
 
@@ -127,6 +127,12 @@ class MockSource extends \lithium\data\Source {
 
 	public function result($type, $resource, $context) {
 
+	}
+
+	public function cast($entity, array $data = array(), array $options = array()) {
+		$defaults = array('first' => false);
+		$options += $defaults;
+		return $options['first'] ? reset($data) : $data;
 	}
 
 	public function relationship($class, $type, $name, array $options = array()) {

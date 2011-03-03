@@ -28,7 +28,7 @@ abstract class Socket extends \lithium\core\Object {
 	 * @var array
 	 */
 	protected $_classes = array(
-		'response' => '\lithium\net\Message'
+		'response' => 'lithium\net\Message'
 	);
 
 	/**
@@ -58,7 +58,7 @@ abstract class Socket extends \lithium\core\Object {
 			'port'       => 80,
 			'timeout'    => 30
 		);
-		parent::__construct((array) $config + $defaults);
+		parent::__construct($config + $defaults);
 	}
 
 	/**

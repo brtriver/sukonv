@@ -6,7 +6,7 @@
  * @license       http://opensource.org/licenses/bsd-license.php The BSD License
  */
 
-use \lithium\data\Connections;
+use lithium\data\Connections;
 
 $checkName = null;
 $checkStatus = $solutions = array();
@@ -154,21 +154,18 @@ foreach ($sanityChecks as $checkName => $check) {
 	<code><?php echo realpath(LITHIUM_APP_PATH . '/config/routes.php'); ?></code>.
 </p>
 
-<?php
-if (!empty($solutions)) {
-	foreach ($solutions as $solution) { ?>
-
-<h4 id="<?php echo $solution['id']; ?>"><?php echo $solution['title']; ?></h4>
-<p><?php echo $solution['content']; ?></p>
-
-<?php	}
-}
-?>
+<?php if ($solutions) { ?>
+	<?php foreach ($solutions as $solution) { ?>
+		<h4 id="<?php echo $solution['id']; ?>"><?php echo $solution['title']; ?></h4>
+		<p><?php echo $solution['content']; ?></p>
+	<?php } ?>
+<?php } ?>
 
 <h4>Additional Resources</h4>
 <ul>
 	<li><a href="http://lithify.me/docs/lithium">Lithium API</a></li>
-	<li><a href="http://rad-dev.org/lithium/wiki">Lithium Development Wiki</a></li>
-	<li><a href="http://rad-dev.org/lithium">Lithium Source</a></li>
+	<li><a href="http://sphere.lithify.me/">Lithium Community</a></li>
+	<li><a href="http://dev.lithify.me/lithium/wiki">Lithium Development Wiki</a></li>
+	<li><a href="http://dev.lithify.me/lithium/source">Lithium Source</a></li>
 	<li><a href="irc://irc.freenode.net/#li3">#li3 irc channel</a></li>
 </ul>

@@ -8,8 +8,9 @@
 
 namespace lithium\net\http;
 
-use \lithium\util\Inflector;
-use \lithium\util\Collection;
+use lithium\util\Inflector;
+use lithium\util\Collection;
+use lithium\net\http\RoutingException;
 
 /**
  * The two primary responsibilities of the `Router` class are to generate URLs from parameter lists,
@@ -20,7 +21,7 @@ use \lithium\util\Collection;
  * `app\controllers\UsersController::login()`, you could set up a route like the following in
  * `app/config/routes.php`:
  * {{{
- * use \lithium\net\http\Router;
+ * use lithium\net\http\Router;
  *
  * Router::connect('/login', array('controller' => 'users', 'action' => 'login'));}}}
  *
@@ -216,6 +217,7 @@ class Router extends \lithium\core\StaticObject {
 			$path = ($options) ? static::_prefix($path, $context, $options) : $path;
 			return $path ?: '/';
 		}
+		throw new RoutingException("No parameter match found for routes.");
 	}
 
 	/**

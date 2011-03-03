@@ -8,32 +8,19 @@
 
 namespace lithium\tests\integration\data;
 
-use \Exception;
-use \ArrayAccess;
-use \lithium\data\Connections;
-
-class Company extends \lithium\data\Model {
-
-	public $hasMany = array('Employees');
-
-	protected $_meta = array('connection' => 'test', 'locked' => false);
-}
-
-class Employee extends \lithium\data\Model {
-
-	public $belongsTo = array('Company');
-
-	protected $_meta = array('connection' => 'test', 'locked' => false);
-
-	public function lastName($document) {
-		$name = explode(' ', $document->name);
-		return $name[1];
-	}
-}
+use Exception;
+use lithium\data\Connections;
+use lithium\tests\mocks\data\Company;
+use lithium\tests\mocks\data\Employee;
 
 class SourceTest extends \lithium\test\Unit {
 
 	protected $_connection = null;
+
+	protected $_classes = array(
+		'employee' => 'lithium\tests\mocks\data\Employee',
+		'company' => 'lithium\tests\mocks\data\Company'
+	);
 
 	public $companyData = array(
 		array('name' => 'StuffMart', 'active' => true),
@@ -65,8 +52,7 @@ class SourceTest extends \lithium\test\Unit {
 	}
 
 	/**
-	 * @todo Make less dumb.
-	 *
+	 * @todo Make this less dumb.
 	 */
 	public function tearDown() {
 		try {
@@ -88,7 +74,7 @@ class SourceTest extends \lithium\test\Unit {
 			Connections::get('test', array('config' => true)) &&
 			Connections::get('test')->isConnected(array('autoConnect' => true))
 		);
-		$this->skipIf(!$isAvailable, "No test connection available");
+		$this->skipIf(!$isAvailable, "No test connection available.");
 	}
 
 	/**
@@ -184,6 +170,7 @@ class SourceTest extends \lithium\test\Unit {
 		$this->assertIdentical(1, Company::count(array('active' => false)));
 		$this->assertIdentical(0, Company::count(array('active' => null)));
 		$all = Company::all();
+		$this->assertIdentical(2, Company::count());
 
 		$expected = count($this->companyData);
 		$this->assertEqual($expected, $all->count());
@@ -236,7 +223,7 @@ class SourceTest extends \lithium\test\Unit {
 		$companyCopy = Company::find($id)->data();
 		$data = $company->data();
 
-		foreach($data as $key => $value) {
+		foreach ($data as $key => $value) {
 			$this->assertTrue(isset($companyCopy[$key]));
 			$this->assertEqual($data[$key], $companyCopy[$key]);
 		}
@@ -267,7 +254,7 @@ class SourceTest extends \lithium\test\Unit {
 		$result = Company::relations('Employees');
 
 		$this->assertEqual('hasMany', $result->data('type'));
-		$this->assertEqual(__NAMESPACE__ . '\Employee', $result->data('to'));
+		$this->assertEqual($this->_classes['employee'], $result->data('to'));
 	}
 
 	public function testRelationshipQuerying() {
@@ -281,8 +268,8 @@ class SourceTest extends \lithium\test\Unit {
 		$stuffMart = Company::findFirstByName('StuffMart');
 		$maAndPas = Company::findFirstByName('Ma \'n Pa\'s Data Warehousing & Bait Shop');
 
-		$this->assertEqual(__NAMESPACE__ . '\Employee', $stuffMart->employees->model());
-		$this->assertEqual(__NAMESPACE__ . '\Employee', $maAndPas->employees->model());
+		$this->assertEqual($this->_classes['employee'], $stuffMart->employees->model());
+		$this->assertEqual($this->_classes['employee'], $maAndPas->employees->model());
 
 		foreach (array('Mr. Smith', 'Mr. Jones', 'Mr. Brown') as $name) {
 			$stuffMart->employees[] = Employee::create(compact('name'));

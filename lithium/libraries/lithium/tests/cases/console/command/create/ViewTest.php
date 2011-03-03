@@ -8,10 +8,10 @@
 
 namespace lithium\tests\cases\console\command\create;
 
-use \lithium\console\command\Create;
-use \lithium\console\command\create\View;
-use \lithium\console\Request;
-use \lithium\core\Libraries;
+use lithium\console\command\Create;
+use lithium\console\command\create\View;
+use lithium\console\Request;
+use lithium\core\Libraries;
 
 class ViewTest extends \lithium\test\Unit {
 
@@ -27,7 +27,7 @@ class ViewTest extends \lithium\test\Unit {
 	}
 
 	public function setUp() {
-		$this->classes = array('response' => '\lithium\tests\mocks\console\MockResponse');
+		$this->classes = array('response' => 'lithium\tests\mocks\console\MockResponse');
 		$this->_backup['cwd'] = getcwd();
 		$this->_backup['_SERVER'] = $_SERVER;
 		$_SERVER['argv'] = array();
@@ -45,8 +45,8 @@ class ViewTest extends \lithium\test\Unit {
 
 	public function testIndexView() {
 		$this->request->params += array(
-			'command' => 'create', 'action' => 'run',
-			'args' => array('view', 'Posts', 'index.html')
+			'command' => 'create', 'action' => 'view',
+			'args' => array('Posts', 'index.html')
 		);
 		$view = new View(array(
 			'request' => $this->request, 'classes' => $this->classes

@@ -8,12 +8,13 @@
 
 namespace lithium\action;
 
-use \lithium\util\Validator;
+use lithium\util\Set;
+use lithium\util\Validator;
 
 /**
- * A `Request` object is passed into or instantiated by the `Dispatcher`, and is responsible for
- * identifying and storing all the information about an HTTP request made to an application,
- * including status, headers, and any GET, POST or PUT data, as well as any data returned from the
+ * A `Request` object is passed into the `Dispatcher`, and is responsible for identifying and
+ * storing all the information about an HTTP request made to an application,  including status,
+ * headers, and any GET, POST or PUT data, as well as any data returned from the
  * `Router`, after the `Request` object has been matched against a `Route`. Includes a property
  * accessor method (`__get()`) which allows any parameters returned from routing to be accessed as
  * properties of the `Request` object.
@@ -120,6 +121,14 @@ class Request extends \lithium\net\http\Message {
 	);
 
 	/**
+	 * Contains an array of content-types, sorted by quality (the priority which the browser
+	 * requests each type).
+	 *
+	 * @var array
+	 */
+	protected $_acceptContent = array();
+
+	/**
 	 * Pulls request data from superglobals.
 	 *
 	 * @return void
@@ -149,8 +158,6 @@ class Request extends \lithium\net\http\Message {
 			unset($_GET['url']);
 		}
 
-		$this->query = $this->data = array();
-
 		if (!empty($this->_config['query'])) {
 			$this->query = $this->_config['query'];
 		}
@@ -160,12 +167,11 @@ class Request extends \lithium\net\http\Message {
 
 		if (!empty($this->_config['data'])) {
 			$this->data = $this->_config['data'];
-		}
-		if (isset($_POST)) {
+		} elseif (isset($_POST)) {
 			$this->data += $_POST;
 		}
 
-		if (!empty($this->data['_method'])) {
+		if (isset($this->data['_method'])) {
 			$this->_env['HTTP_X_HTTP_METHOD_OVERRIDE'] = strtoupper($this->data['_method']);
 			unset($this->data['_method']);
 		}
@@ -177,9 +183,7 @@ class Request extends \lithium\net\http\Message {
 		$method = strtoupper($this->_env['REQUEST_METHOD']);
 
 		if (($method == 'POST' || $method == 'PUT') && !$this->data) {
-			$type = $this->type();
-
-			if ($type && $type !== 'html') {
+			if (($type = $this->type()) && $type !== 'html') {
 				$this->_stream = $this->_stream ?: fopen('php://input', 'r');
 				$media = $this->_classes['media'];
 				$this->data = (array) $media::decode($type, stream_get_contents($this->_stream));
@@ -189,6 +193,7 @@ class Request extends \lithium\net\http\Message {
 
 		if (isset($_FILES) && $_FILES) {
 			$result = array();
+
 			$normalize = function($key, $value) use ($result, &$normalize){
 				foreach ($value as $param => $content) {
 					foreach ($content as $num => $val) {
@@ -218,7 +223,7 @@ class Request extends \lithium\net\http\Message {
 					}
 				}
 			}
-			$this->data = (array) $this->data + $result;
+			$this->data = Set::merge((array) $this->data, $result);
 		}
 	}
 
@@ -237,6 +242,19 @@ class Request extends \lithium\net\http\Message {
 	}
 
 	/**
+	 * Allows request parameters to be checked using short-hand notation. See the `__get()` method
+	 * for more details.
+	 *
+	 * @see lithium\action\Request::__get()
+	 * @param string $name The name of the request parameter to check.
+	 * @return boolean Returns true if the key in `$name` is set in the `$params` array, otherwise
+	 *         `false`.
+	 */
+	public function __isset($name) {
+		return isset($this->params[$name]);
+	}
+
+	/**
 	 * Queries PHP's environment settings, and provides an abstraction for standardizing expected
 	 * environment values across varying platforms, as well as specify custom environment flags.
 	 *
@@ -245,7 +263,7 @@ class Request extends \lithium\net\http\Message {
 	 * @todo Refactor to lazy-load environment settings
 	 */
 	public function env($key) {
-		if ($key == 'base') {
+		if (strtolower($key) == 'base') {
 			return $this->_base;
 		}
 
@@ -262,7 +280,7 @@ class Request extends \lithium\net\http\Message {
 			$val = ($addr = $this->env('HTTP_PC_REMOTE_ADDR')) ? $addr : $val;
 		}
 
-		if ($val !== null && $val !== false) {
+		if ($val !== null && $val !== false && $key !== 'HTTPS') {
 			return $val;
 		}
 
@@ -298,38 +316,83 @@ class Request extends \lithium\net\http\Message {
 	}
 
 	/**
-	 * Returns the type of content that the client is requesting.
+	 * Returns information about the type of content that the client is requesting.
 	 *
-	 * @see lithium\net\http\Media
+	 * @see lithium\net\http\Media::negotiate()
+	 * @param $type mixed If not specified, returns the media type name that the client prefers,
+	 *              using content negotiation. If a media type name (string) is passed, returns
+	 *              `true` or `false`, indicating whether or not that type is accepted by the client
+	 *              at all. If `true`, returns the raw content types from the `Accept` header,
+	 *              parsed into an array and sorted by client preference.
 	 * @return string Returns a simple type name if the type is registered (i.e. `'json'`), or
-	 *         a fully-qualified content-type if not (i.e. `'image/jpeg'`).
+	 *         a fully-qualified content-type if not (i.e. `'image/jpeg'`), or a boolean or array,
+	 *         depending on the value of `$type`.
 	 */
-	public function accepts() {
-		if (isset($this->params['type'])) {
+	public function accepts($type = null) {
+		if ($type === true) {
+			return $this->_parseAccept();
+		}
+		if (!$type && isset($this->params['type'])) {
 			return $this->params['type'];
 		}
-		if (!(($accept = $this->env('HTTP_ACCEPT')) && strpos($accept, ',') !== false)) {
-			return 'html';
+		$media = $this->_classes['media'];
+		return $media::negotiate($this) ?: 'html';
+	}
+
+	protected function _parseAccept() {
+		if ($this->_acceptContent) {
+			return $this->_acceptContent;
+		}
+		$accept = $this->env('HTTP_ACCEPT');
+		$accept = (strpos($accept, ',') === false) ? array('text/html') : explode(',', $accept);
+
+		foreach (array_reverse($accept) as $i => $type) {
+			unset($accept[$i]);
+			list($type, $q) = (explode(';q=', $type, 2) + array($type, 1.0 + $i / 100));
+			$accept[$type] = ($type == '*/*') ? 0.1 : floatval($q);
+		}
+		arsort($accept, SORT_NUMERIC);
+
+		if (isset($accept['application/xhtml+xml']) && $accept['application/xhtml+xml'] >= 1) {
+			unset($accept['application/xml']);
 		}
 		$media = $this->_classes['media'];
-		$accept = explode(',', $accept);
 
-		if ($accept[0] == 'application/xml' && in_array('application/xhtml+xml', $accept)) {
-			unset($accept[0]);
-		}
-
-		foreach ($accept as $type) {
-			if ($result = $media::type($type)) {
-				return $result['content'];
+		if (isset($this->params['type']) && ($handler = $media::type($this->params['type']))) {
+			if (isset($handler['content'])) {
+				$type = (array) $handler['content'];
+				$accept = array(current($type) => 1) + $accept;
 			}
 		}
+		return $this->_acceptContent = array_keys($accept);
 	}
 
 	/**
-	 * Uses a custom prefix syntax to extract specific data points from the request.
+	 * This method allows easy extraction of any request data using a prefixed key syntax. By
+	 * passing keys in the form of `'prefix:key'`, it is possible to query different information of
+	 * various different types, including GET and POST data, and server environment variables. The
+	 * full list of prefixes is as follows:
 	 *
-	 * @param string $key data:title, env:base
-	 * @return string
+	 * - `'data'`: Retrieves values from POST data.
+	 * - `'params'`: Retrieves query parameters returned from the routing system.
+	 * - `'query'`: Retrieves values from GET data.
+	 * - `'env'`: Retrieves values from the server or environment, such as `'env:https'`, or custom
+	 *   environment values, like `'env:base'`. See the `env()` method for more info.
+	 * - `'http'`: Retrieves header values (i.e. `'http:accept'`), or the HTTP request method (i.e.
+	 *   `'http:method'`).
+	 *
+	 * This method is used in several different places in the framework in order to provide the
+	 * ability to act conditionally on different aspects of the request. See `Media::type()` (the
+	 * section on content negotiation) and the routing system for more information.
+	 *
+	 *  _Note_: All keys should be _lower-cased_, even when getting HTTP headers.
+	 * @see lithium\action\Request::env()
+	 * @see lithium\net\http\Media::type()
+	 * @see lithium\net\http\Router
+	 * @param string $key A prefixed key indiciating what part of the request data the requested
+	 *               value should come from, and the name of the value to retrieve, in lower case.
+	 * @return string Returns the value of a GET, POST, routing or environment variable, or an
+	 *         HTTP header or method name.
 	 */
 	public function get($key) {
 		list($var, $key) = explode(':', $key);
@@ -338,7 +401,7 @@ class Request extends \lithium\net\http\Message {
 			case in_array($var, array('params', 'data', 'query')):
 				return isset($this->{$var}[$key]) ? $this->{$var}[$key] : null;
 			case ($var === 'env'):
-				return $this->env($key);
+				return $this->env(strtoupper($key));
 			case ($var === 'http' && $key === 'method'):
 				return $this->env('REQUEST_METHOD');
 			case ($var === 'http'):
@@ -365,20 +428,21 @@ class Request extends \lithium\net\http\Message {
 		}
 		$detector = $this->_detectors[$flag];
 
-		if (is_array($detector)) {
-			list($key, $check) = $detector + array('', '');
-			if (is_array($check)) {
-				$check = '/' . join('|', $check) . '/i';
-			}
-			if (Validator::isRegex($check)) {
-				return (boolean) preg_match($check, $this->env($key));
-			}
-			return ($this->env($key) == $check);
-		}
-		if (is_callable($detector)) {
+		if (!is_array($detector) && is_callable($detector)) {
 			return $detector($this);
 		}
-		return (boolean) $this->env($detector);
+		if (!is_array($detector)) {
+			return (boolean) $this->env($detector);
+		}
+		list($key, $check) = $detector + array('', '');
+
+		if (is_array($check)) {
+			$check = '/' . join('|', $check) . '/i';
+		}
+		if (Validator::isRegex($check)) {
+			return (boolean) preg_match($check, $this->env($key));
+		}
+		return ($this->env($key) == $check);
 	}
 
 	/**
@@ -391,22 +455,36 @@ class Request extends \lithium\net\http\Message {
 	 */
 	public function type($type = null) {
 		if ($type === null) {
-			$type = $this->type;
-
-			if (empty($type)) {
-				$type = $this->env('CONTENT_TYPE');
-			}
+			$type = $this->type ?: $this->env('CONTENT_TYPE');
 		}
 		return parent::type($type);
 	}
 
 	/**
-	 * Creates a 'detector' used with Request::is().  A detector is a boolean check that is created
-	 * to determine something about a request.
+	 * Creates a _detector_ used with `Request::is()`.  A detector is a boolean check that is
+	 * created to determine something about a request.
+	 *
+	 * A detector check can be either an exact string match or a regular expression match against a
+	 * header or environment variable. A detector check can also be a closure that accepts the
+	 * `Request` object instance as a parameter.
+	 *
+	 * For example, to detect whether a request is from an iPhone, you can do the following:
+	 * {{{ embed:lithium\tests\cases\action\RequestTest::testDetect(11-12) }}}
 	 *
 	 * @see lithium\action\Request::is()
-	 * @param string $flag
-	 * @param boolean $detector
+	 * @param string $flag The name of the detector check. Used in subsequent calls to
+	 *               `Request::is()`.
+	 * @param mixed $detector Detectors can be specified in four different ways:
+	 *              - The name of an HTTP header or environment variable. If a string, calling the
+	 *                detector will check that the header or environment variable exists and is set
+	 *                to a non-empty value.
+	 *              - A two-element array containing a header/environment variable name, and a value
+	 *                to match against. The second element of the array must be an exact match to
+	 *                the header or variable value.
+	 *              - A two-element array containing a header/environment variable name, and a
+	 *                regular expression that matches against the value, as in the example above.
+	 *              - A closure which accepts an instance of the `Request` object and returns a
+	 *                boolean value.
 	 * @return void
 	 */
 	public function detect($flag, $detector = null) {
@@ -426,8 +504,7 @@ class Request extends \lithium\net\http\Message {
 	 * @todo Rewrite me to remove constant dependencies.
 	 */
 	function referer($default = null, $local = false) {
-		$ref = $this->env('HTTP_REFERER');
-		if (!empty($ref)) {
+		if ($ref = $this->env('HTTP_REFERER')) {
 			if (!$local) {
 				return $ref;
 			}
@@ -444,7 +521,7 @@ class Request extends \lithium\net\http\Message {
 	 */
 	protected function _base() {
 		$base = str_replace('\\', '/', dirname($this->env('PHP_SELF')));
-		return rtrim(str_replace(array('/app/webroot', '/webroot'), '', $base), '/');
+		return rtrim(str_replace(array("/app/webroot", '/webroot'), '', $base), '/');
 	}
 }
 

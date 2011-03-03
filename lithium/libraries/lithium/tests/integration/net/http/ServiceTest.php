@@ -8,7 +8,7 @@
 
 namespace lithium\tests\integration\net\http;
 
-use \lithium\net\http\Service;
+use lithium\net\http\Service;
 
 class ServiceTest extends \lithium\test\Integration {
 
@@ -16,20 +16,32 @@ class ServiceTest extends \lithium\test\Integration {
 		$service = new Service(array(
 			'classes' => array('socket' => '\lithium\net\socket\Stream')
 		));
-		$this->assertPattern('/localhost/', $service->get());
+		$service->head();
+		
+		$expected = array('code' => 200, 'message' => 'OK');
+		$result = $service->last->response->status;
+		$this->assertEqual($expected, $result);
 	}
 
 	public function testContextGet() {
 		$service = new Service(array(
 			'classes' => array('socket' => '\lithium\net\socket\Context')
 		));
-		$this->assertPattern('/localhost/', $service->get());
+		$service->head();
+		
+		$expected = array('code' => 200, 'message' => 'OK');
+		$result = $service->last->response->status;
+		$this->assertEqual($expected, $result);
 	}
 
 	public function testCurlGet() {
 		$service = new Service(array(
 			'classes' => array('socket' => '\lithium\net\socket\Curl')
 		));
-		$this->assertPattern('/localhost/', $service->get());
+		$service->head();
+		
+		$expected = array('code' => 200, 'message' => 'OK');
+		$result = $service->last->response->status;
+		$this->assertEqual($expected, $result);
 	}
 }

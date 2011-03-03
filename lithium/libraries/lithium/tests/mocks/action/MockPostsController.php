@@ -27,7 +27,7 @@ class MockPostsController extends \lithium\action\Controller {
 	}
 
 	public function send() {
-		$this->redirect('/posts');
+		$this->redirect('/posts', array('exit' => true));
 	}
 
 	public function type($raw = false) {
@@ -47,7 +47,7 @@ class MockPostsController extends \lithium\action\Controller {
 	}
 
 	public function view2($id = null) {
-		$this->render('view');
+		$this->render(array('template' => 'view'));
 	}
 
 	public function view3($id = null) {

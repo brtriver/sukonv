@@ -20,6 +20,13 @@ use lithium\data\model\QueryException;
  */
 class MySql extends \lithium\data\source\Database {
 
+	protected $_classes = array(
+		'entity' => 'lithium\data\entity\Record',
+		'set' => 'lithium\data\collection\RecordSet',
+		'relationship' => 'lithium\data\model\Relationship',
+		'result' => 'lithium\data\source\database\adapter\my_sql\Result'
+	);
+
 	/**
 	 * MySQL column type definitions.
 	 *
@@ -116,16 +123,22 @@ class MySql extends \lithium\data\source\Database {
 			return false;
 		}
 
-		if ($config['persistent']) {
+		if (!$config['persistent']) {
 			$this->connection = mysql_connect($host, $config['login'], $config['password'], true);
 		} else {
 			$this->connection = mysql_pconnect($host, $config['login'], $config['password']);
 		}
+		
+		if (!$this->connection) {
+			return false;
+		}
 
 		if (mysql_select_db($config['database'], $this->connection)) {
 			$this->_isConnected = true;
+		} else {
+			return false;
 		}
-
+		
 		if ($config['encoding']) {
 			$this->encoding($config['encoding']);
 		}
@@ -161,13 +174,15 @@ class MySql extends \lithium\data\source\Database {
 
 		return $this->_filter(__METHOD__, $params, function($self, $params) use ($_config) {
 			$name = $self->name($_config['database']);
-			$result = $self->invokeMethod('_execute', array("SHOW TABLES FROM {$name};"));
+
+			if (!$result = $self->invokeMethod('_execute', array("SHOW TABLES FROM {$name};"))) {
+				return null;
+			}
 			$entities = array();
 
-			while ($data = $self->result('next', $result, null)) {
+			while ($data = $result->next()) {
 				list($entities[]) = $data;
 			}
-			$self->result('close', $result, null);
 			return $entities;
 		});
 	}
@@ -187,19 +202,21 @@ class MySql extends \lithium\data\source\Database {
 	 */
 	public function describe($entity, array $meta = array()) {
 		$params = compact('entity', 'meta');
-		return $this->_filter(__METHOD__, $params, function($self, $params, $chain) {
+		return $this->_filter(__METHOD__, $params, function($self, $params) {
 			extract($params);
 
 			$name = $self->invokeMethod('_entityName', array($entity));
-			$columns = $self->read("DESCRIBE {$name}", array('return' => 'array'));
+			$columns = $self->read("DESCRIBE {$name}", array('return' => 'array', 'schema' => array(
+				'field', 'type', 'null', 'key', 'default', 'extra'
+			)));
 			$fields = array();
 
 			foreach ($columns as $column) {
-				$match = $self->invokeMethod('_column', array($column['Type']));
+				$match = $self->invokeMethod('_column', array($column['type']));
 
-				$fields[$column['Field']] = $match + array(
-					'null'     => ($column['Null'] == 'YES' ? true : false),
-					'default'  => $column['Default'],
+				$fields[$column['field']] = $match + array(
+					'null'     => ($column['null'] == 'YES' ? true : false),
+					'default'  => $column['default'],
 				);
 			}
 			return $fields;
@@ -225,39 +242,11 @@ class MySql extends \lithium\data\source\Database {
 	}
 
 	/**
-	 * Handle the result.
-	 *
-	 * @param string $type next|close The current step in the iteration.
-	 * @param mixed $resource The result resource returned from the database.
-	 * @param object $context The given query (an instance of `lithium\data\model\Query`).
-	 * @return mixed Result
-	 */
-	public function result($type, $resource, $context) {
-		if (!is_resource($resource)) {
-			return null;
-		}
-
-		switch ($type) {
-			case 'next':
-				$result = mysql_fetch_row($resource);
-			break;
-			case 'close':
-				mysql_free_result($resource);
-				$result = null;
-			break;
-			default:
-				$result = parent::result($type, $resource, $context);
-			break;
-		}
-		return $result;
-	}
-
-	/**
 	 * Converts a given value into the proper type based on a given schema definition.
 	 *
 	 * @see lithium\data\source\Database::schema()
 	 * @param mixed $value The value to be converted. Arrays will be recursively converted.
-	 * @param array $schema Formatted array from `\lithium\data\source\Database::schema()`
+	 * @param array $schema Formatted array from `lithium\data\source\Database::schema()`
 	 * @return mixed Value with converted type.
 	 */
 	public function value($value, array $schema = array()) {
@@ -302,6 +291,25 @@ class MySql extends \lithium\data\source\Database {
 		return null;
 	}
 
+	public function alias($alias, $context) {
+		if ($context->type() == 'update' || $context->type() == 'delete') {
+			return;
+		}
+		return parent::alias($alias, $context);
+	}
+
+	/**
+	 * @todo Eventually, this will need to rewrite aliases for DELETE and UPDATE queries, same with
+	 *       order().
+	 * @param string $conditions 
+	 * @param string $context 
+	 * @param array $options 
+	 * @return void
+	 */
+	public function conditions($conditions, $context, array $options = array()) {
+		return parent::conditions($conditions, $context, $options);
+	}
+
 	/**
 	 * Execute a given query.
  	 *
@@ -322,10 +330,13 @@ class MySql extends \lithium\data\source\Database {
 			$options = $params['options'];
 
 			$func = ($options['buffered']) ? 'mysql_query' : 'mysql_unbuffered_query';
-			$result = $func($sql, $self->connection);
+			$resource = $func($sql, $self->connection);
 
-			if (is_resource($result) || $result === true) {
-				return $result;
+			if ($resource === true) {
+				return true;
+			}
+			if (is_resource($resource)) {
+				return $self->invokeMethod('_instance', array('result', compact('resource')));
 			}
 			list($code, $error) = $self->error();
 			throw new QueryException("{$sql}: {$error}", $code);
@@ -354,8 +365,7 @@ class MySql extends \lithium\data\source\Database {
 	 */
 	protected function _insertId($query) {
 		$resource = $this->_execute('SELECT LAST_INSERT_ID() AS insertID');
-		list($id) = $this->result('next', $resource, null);
-		$this->result('close', $resource, null);
+		list($id) = $resource->next();
 		return ($id && $id !== '0') ? $id : null;
 	}
 

@@ -8,15 +8,16 @@
 
 namespace lithium\tests\cases\data;
 
-use \lithium\data\Model;
-use \lithium\data\Connections;
-use \lithium\analysis\Inspector;
-use \lithium\tests\mocks\data\MockTag;
-use \lithium\tests\mocks\data\MockPost;
-use \lithium\tests\mocks\data\MockComment;
-use \lithium\tests\mocks\data\MockTagging;
-use \lithium\tests\mocks\data\MockCreator;
-use \lithium\tests\mocks\data\MockPostForValidates;
+use lithium\data\Model;
+use lithium\data\model\Query;
+use lithium\data\Connections;
+use lithium\analysis\Inspector;
+use lithium\tests\mocks\data\MockTag;
+use lithium\tests\mocks\data\MockPost;
+use lithium\tests\mocks\data\MockComment;
+use lithium\tests\mocks\data\MockTagging;
+use lithium\tests\mocks\data\MockCreator;
+use lithium\tests\mocks\data\MockPostForValidates;
 
 class ModelTest extends \lithium\test\Unit {
 
@@ -25,7 +26,7 @@ class ModelTest extends \lithium\test\Unit {
 	public function setUp() {
 		$this->_configs = Connections::config();
 		Connections::config(array('mock-source' => array(
-			'type' => '\lithium\tests\mocks\data\MockSource'
+			'type' => 'lithium\tests\mocks\data\MockSource'
 		)));
 		MockPost::config(array('connection' => 'mock-source'));
 		MockTag::config();
@@ -159,7 +160,7 @@ class ModelTest extends \lithium\test\Unit {
 			'link' => 'key',
 			'fields' => true,
 			'fieldName' => 'mockPost',
-			'conditions' => null,
+			'constraint' => array(),
 			'init' => true
 		);
 		$this->assertEqual($expected, MockComment::relations('MockPost')->data());
@@ -173,7 +174,7 @@ class ModelTest extends \lithium\test\Unit {
 			'keys' => array('mock_post_id' => 'id'),
 			'link' => 'key',
 			'fieldName' => 'mockComment',
-			'conditions' => null,
+			'constraint' => array(),
 			'init' => true
 		);
 		$this->assertEqual($expected, MockPost::relations('MockComment')->data());
@@ -200,7 +201,7 @@ class ModelTest extends \lithium\test\Unit {
 
 	public function testSimpleFind() {
 		$result = MockPost::find('all');
-		$this->assertTrue($result['query'] instanceof \lithium\data\model\Query);
+		$this->assertTrue($result['query'] instanceof Query);
 	}
 
 	public function testMagicFinders() {
@@ -211,6 +212,11 @@ class ModelTest extends \lithium\test\Unit {
 		$expected = array('id' => 5);
 		$this->assertEqual($expected, $result['query']->conditions());
 		$this->assertEqual('read', $result['query']->type());
+
+		$result = MockPost::findAllByFoo(13, array('order' => array('created_at' => 'desc')));
+		$this->assertFalse($result['query']->data());
+		$this->assertEqual(array('foo' => 13), $result['query']->conditions());
+		$this->assertEqual(array('created_at' => 'desc'), $result['query']->order());
 
 		$this->expectException('/Method findFoo not defined or handled in class/');
 		MockPost::findFoo();
@@ -238,6 +244,7 @@ class ModelTest extends \lithium\test\Unit {
 	public function testFilteredFind() {
 		MockComment::applyFilter('find', function($self, $params, $chain) {
 			$result = $chain->next($self, $params, $chain);
+
 			if ($result != null) {
 				$result->filtered = true;
 			}
@@ -461,8 +468,7 @@ class ModelTest extends \lithium\test\Unit {
 		$this->assertEqual(array('published' => false), $query->conditions());
 
 		$keys = array_keys(array_filter($query->export(Connections::get('mock-source'))));
-		$expected = array('name', 'conditions', 'model', 'source');
-		$this->assertEqual($expected, $keys);
+		$this->assertEqual(array('type', 'name', 'conditions', 'model', 'source'), $keys);
 	}
 
 	public function testFindFirst() {

@@ -8,9 +8,9 @@
 
 namespace lithium\tests\cases\security\auth\adapter;
 
-use \lithium\action\Request;
-use \lithium\data\entity\Record;
-use \lithium\security\auth\adapter\Form;
+use lithium\action\Request;
+use lithium\data\entity\Record;
+use lithium\security\auth\adapter\Form;
 
 class FormTest extends \lithium\test\Unit {
 
@@ -24,20 +24,36 @@ class FormTest extends \lithium\test\Unit {
 		$request->data = array('username' => 'Person', 'password' => 'password');
 
 		$result = $subject->check($request);
-		$expected = array('username' => 'Person', 'password' => sha1('password'));
+		$expected = array('username' => 'Person',
+			'password' => 'b109f3bbbc244eb82441917ed06d618b9008dd09b3befd1b5e07394c706a8bb980b1d7'.
+					'785e5976ec049b46df5f1326af5a2ea6d103fd07c95385ffab0cacbc86');
 		$this->assertEqual($expected, $result);
 	}
 
 	public function testLoginWithFilters() {
-		$subject = new Form(array('model' => __CLASS__, 'filters' => array(
-			'username' => 'sha1'
-		)));
+		$subject = new Form(array('model' => __CLASS__, 'filters' => array('username' => 'sha1')));
 		$request = new Request();
 		$request->data = array('username' => 'Person', 'password' => 'password');
 
+		$expected = array(
+			'username' => sha1('Person'),
+			'password' => 'b109f3bbbc244eb82441917ed06d618b9008dd09b3befd1b5e07394c706a8bb980b1d7'.
+					'785e5976ec049b46df5f1326af5a2ea6d103fd07c95385ffab0cacbc86'
+		);
+		$this->assertEqual($expected, $subject->check($request));
+	}
+
+	/**
+	 * Tests that attempted exploitation via malformed credential submission.
+	 *
+	 * @return void
+	 */
+	public function testLoginWithArray() {
+		$subject = new Form(array('model' => __CLASS__));
+		$request = new Request();
+		$request->data = array('username' => array('!=' => ''), 'password' => '');
 		$result = $subject->check($request);
-		$expected = array('username' => sha1('Person'), 'password' => sha1('password'));
-		$this->assertEqual($expected, $result);
+		$this->assertEqual('Array', $result['username']);
 	}
 
 	/**

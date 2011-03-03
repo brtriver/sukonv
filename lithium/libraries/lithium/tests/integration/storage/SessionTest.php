@@ -8,7 +8,7 @@
 
 namespace lithium\tests\integration\storage;
 
-use \lithium\storage\Session;
+use lithium\storage\Session;
 
 class SessionTest extends \lithium\test\Unit {
 
@@ -28,6 +28,34 @@ class SessionTest extends \lithium\test\Unit {
 		foreach ($cookies as $cookie) {
 			setcookie($cookie, "", time()-1);
 		}
+	}
+
+	public function testWriteAndRead() {
+		Session::config(array(
+			'default' => array('adapter' => 'Php')
+		));
+
+		$key = 'write_key';
+		$value = 'write_value';
+
+		Session::write($key, $value);
+		$result = Session::read($key);
+		$this->assertEqual($value, $result);
+
+		$key2 = 'write_key_2';
+		$value2 = 'write_value_2';
+		Session::write($key2, $value2);
+		$result = Session::read($key2);
+		$this->assertEqual($value2, $result);
+
+		$this->assertTrue(Session::delete($key));
+		$this->assertTrue(Session::delete($key2));
+
+		$result = Session::read($key);
+		$result2 = Session::read($key2);
+
+		$this->assertNull($result);
+		$this->assertNull($result2);
 	}
 
 	public function testWriteReadDelete() {

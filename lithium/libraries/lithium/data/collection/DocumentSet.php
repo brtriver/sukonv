@@ -8,21 +8,7 @@
 
 namespace lithium\data\collection;
 
-use \Iterator;
-use \lithium\data\Source;
-use \lithium\util\Collection;
-
 class DocumentSet extends \lithium\data\Collection {
-
-	/**
-	 * The class dependencies for `Document`.
-	 *
-	 * @var array
-	 */
-	protected $_classes = array(
-		'entity' => 'lithium\data\entity\Document',
-		'set' => __CLASS__
-	);
 
 	/**
 	 * PHP magic method used when setting properties on the `Document` instance, i.e.
@@ -50,15 +36,16 @@ class DocumentSet extends \lithium\data\Collection {
 				$key = $path[$i];
 				$next = $current->__get($key);
 
-				if (!$next instanceof Document) {
-					$next = $current->_data[$key] = $this->_relation('set', $key, array());
+				if (!is_object($next) && ($model = $this->_model)) {
+					$next = $model::connection()->cast($this, $next);
+					$current->_data[$key] = $next;
 				}
 				$current = $next;
 			}
 			$current->__set(end($path), $value);
 		}
 
-		if ($this->_isComplexType($value) && !$value instanceof Iterator) {
+		if (is_array($value)) {
 			$value = $this->_relation('set', $name, $value);
 		}
 		$this->_data[$name] = $value;
@@ -114,20 +101,18 @@ class DocumentSet extends \lithium\data\Collection {
 	public function offsetGet($offset) {
 		$data = null;
 		$null  = null;
+		$model = $this->_model;
 
 		if (!isset($this->_data[$offset]) && !$data = $this->_populate(null, $offset)) {
 			return $null;
 		}
-		$data = $data ?: $this->_data[$offset];
-
-		if (is_a($data, $this->_classes['entity'])) {
-			return $data;
+		if (is_array($data = $this->_data[$offset]) && $model) {
+			$this->_data[$offset] = $model::connection()->cast($this, $data);
 		}
-
-		if ($this->_isComplexType($data)) {
-			$this->_data[$offset] = $this->_relation('entity', $offset, $this->_data[$offset]);
+		if (isset($this->_data[$offset])) {
+			return $this->_data[$offset];
 		}
-		return $this->_data[$offset];
+		return $null;
 	}
 
 	/**
@@ -136,17 +121,16 @@ class DocumentSet extends \lithium\data\Collection {
 	 * @return object Returns the first `Document` object instance in the collection.
 	 */
 	public function rewind() {
-		$data = parent::rewind();
+		$data = parent::rewind() ?: $this->_populate();
 		$key = key($this->_data);
 
-		if (is_a($data, $this->_classes['entity'])) {
+		if (is_object($data)) {
 			return $data;
 		}
 
-		if ($this->_isComplexType($data)) {
-			$this->_data[$key] = $this->_relation('entity', $key, $this->_data[$key]);
+		if (isset($this->_data[$key])) {
+			return $this->offsetGet($key);
 		}
-		return isset($this->_data[$key]) ? $this->_data[$key] : null;
 	}
 
 	public function current() {
@@ -156,7 +140,7 @@ class DocumentSet extends \lithium\data\Collection {
 	/**
 	 * Returns the next document in the set, and advances the object's internal pointer. If the end
 	 * of the set is reached, a new document will be fetched from the data source connection handle
-	 * (`$_handle`). If no more documents can be fetched, returns `null`.
+	 * If no more documents can be fetched, returns `null`.
 	 *
 	 * @return object|null Returns the next document in the set, or `null`, if no more documents are
 	 *         available.
@@ -173,37 +157,11 @@ class DocumentSet extends \lithium\data\Collection {
 		return $this->_valid ? $this->offsetGet(key($this->_data)) : null;
 	}
 
-	public function export(Source $dataSource, array $options = array()) {
-		$map = function($doc) use ($dataSource, $options) {
-			return is_array($doc) ? $doc : $doc->export($dataSource, $options);
+	public function export(array $options = array()) {
+		$map = function($doc) use ($options) {
+			return is_array($doc) ? $doc : $doc->export();
 		};
 		return array_map($map, $this->_data);
-	}
-
-	/**
-	 * Used by getter and setter methods to determine whether the value of data is a complex type
-	 * that should be given its own sub-object withih the `Document`.
-	 *
-	 * @param mixed $data The data to be tested. This test is used to determine if `$data` should be
-	 *              wrapped in an instance of `Document`.
-	 * @return boolean Returns `false` if the value of `$data` is a scalar type or a one-dimensional
-	 *         array of scalar values, otherwise returns `true`.
-	 */
-	protected function _isComplexType($data) {
-		if (is_object($data) && (array) $data === array()) {
-			return false;
-		}
-		if (is_scalar($data) || !$data) {
-			return false;
-		}
-		if (is_array($data)) {
-			if (array_keys($data) === range(0, count($data) - 1)) {
-				if (array_filter($data, 'is_scalar') == array_filter($data)) {
-					return false;
-				}
-			}
-		}
-		return true;
 	}
 
 	/**
@@ -215,13 +173,16 @@ class DocumentSet extends \lithium\data\Collection {
 	 * @return array
 	 */
 	protected function _populate($data = null, $key = null) {
-		if ($this->closed()) {
+		if ($this->closed() || !($model = $this->_model)) {
 			return;
 		}
-		if (($data = $data ?: $this->_handle->result('next', $this->_result, $this)) === null) {
+		$conn = $model::connection();
+
+		if (($data = $data ?: $this->_result->next()) === null) {
 			return $this->close();
 		}
-		return $this->_data[] = $this->_relation('entity', $key, $data, array('exists' => true));
+		$options = array('exists' => true, 'first' => true, 'pathKey' => $this->_pathKey);
+		return $this->_data[] = $conn->cast($this, array($key => $data), $options);
 	}
 
 	/**

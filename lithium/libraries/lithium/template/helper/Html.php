@@ -62,6 +62,14 @@ class Html extends \lithium\template\Helper {
 	);
 
 	/**
+	 * List of meta tags to cache and to output.
+	 *
+	 * @var array
+	 * @see lithium\template\helper\Html::meta()
+	 */
+	protected $_metaList = array();
+
+	/**
 	 * Used by output handlers to calculate asset paths in conjunction with the `Media` class.
 	 *
 	 * @var array
@@ -185,6 +193,33 @@ class Html extends \lithium\template\Helper {
 		if ($this->_context) {
 			$this->_context->styles($style);
 		}
+	}
+	/**
+	 * Creates a tag for the ```<head>``` section of your document.
+	 *
+	 * If there is a rendering context, then it also pushes the resulting tag to it.
+	 *
+	 * The ```$options``` must match the named parameters from ```$_strings``` for the
+	 * given ```$tag```.
+	 *
+	 * @param string $tag the name of a key in ```$_strings```
+	 * @param array $options the options required by ```$_strings[$tag]```
+	 * @return mixed a string if successful, otherwise NULL
+	 * @filter This method can be filtered.
+	 */
+	public function head($tag, array $options) {
+		if(!isset($this->_strings[$tag])) {
+			return NULL;
+		}
+		$method = __METHOD__;
+		$filter = function($self, $options, $chain) use ($method, $tag) {
+			return $self->invokeMethod('_render', array($method, $tag, $options));
+		};
+		$head = $this->_filter($method, $options, $filter);
+		if($this->_context) {
+			$this->_context->head($head);
+		}
+		return $head;
 	}
 
 	/**

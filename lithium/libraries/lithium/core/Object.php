@@ -8,7 +8,7 @@
 
 namespace lithium\core;
 
-use \lithium\util\collection\Filters;
+use lithium\util\collection\Filters;
 
 /**
  * Base class in Lithium's hierarchy, from which all concrete classes inherit. This class defines
@@ -212,10 +212,12 @@ class Object {
 		if (is_object($name) || !$name) {
 			return $name;
 		}
+		$name = (string) $name;
+
 		if (isset($this->_classes[$name])) {
 			$name = $this->_classes[$name];
 		}
-		return class_exists($name) ? new $name($config) : null;
+		return (is_string($name) && class_exists($name)) ? new $name($config) : null;
 	}
 
 	/**

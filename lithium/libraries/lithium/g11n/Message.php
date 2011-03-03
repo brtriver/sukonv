@@ -8,10 +8,10 @@
 
 namespace lithium\g11n;
 
-use \lithium\core\Environment;
-use \lithium\util\String;
-use \lithium\g11n\Locale;
-use \lithium\g11n\Catalog;
+use lithium\core\Environment;
+use lithium\util\String;
+use lithium\g11n\Locale;
+use lithium\g11n\Catalog;
 
 /**
  * The `Message` class is concerned with an aspect of globalizing static message strings
@@ -187,7 +187,7 @@ class Message extends \lithium\core\StaticObject {
 		$params = compact('id', 'count', 'locale', 'options');
 
 		$cache =& static::$_cachedPages;
-		return static::_filter(__METHOD__, $params, function($self, $params, $chain) use (&$cache) {
+		return static::_filter(__FUNCTION__, $params, function($self, $params) use (&$cache) {
 			extract($params);
 
 			if (!isset($cache[$options['scope']][$locale])) {

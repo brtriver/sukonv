@@ -8,6 +8,8 @@
 
 namespace lithium\data;
 
+use lithium\core\NetworkException;
+
 /**
  * This is the base class for Lithium's data abstraction layer.
  *
@@ -23,14 +25,22 @@ namespace lithium\data;
 abstract class Source extends \lithium\core\Object {
 
 	/**
+	 * The list of object properties to be automatically assigned from configuration passed to
+	 * `__construct()`.
+	 *
+	 * @var array
+	 */
+	protected $_autoConfig = array('classes' => 'merge');
+
+	/**
 	 * Default entity and set classes used by subclasses of `Source`.
 	 *
 	 * @var array
 	 */
 	protected $_classes = array(
-		'entity' => '\lithium\data\Entity',
-		'set' => '\lithium\data\Collection',
-		'relationship' => '\lithium\data\model\Relationship'
+		'entity' => 'lithium\data\Entity',
+		'set' => 'lithium\data\Collection',
+		'relationship' => 'lithium\data\model\Relationship'
 	);
 
 	/**
@@ -99,7 +109,11 @@ abstract class Source extends \lithium\core\Object {
 		$options += $defaults;
 
 		if (!$this->_isConnected && $options['autoConnect']) {
-			$this->connect();
+			try {
+				$this->connect();
+			} catch (NetworkException $e) {
+				$this->_isConnected = false;
+			}
 		}
 		return $this->_isConnected;
 	}
@@ -194,6 +208,26 @@ abstract class Source extends \lithium\core\Object {
 	abstract public function delete($query, array $options = array());
 
 	/**
+	 * Casts data into proper format when added to a collection or entity object.
+	 *
+	 * @param mixed $entity The entity or collection for which data is being cast, or the name of
+	 *              the model class to which the entity/collection is bound.
+	 * @param array $data An array of data being assigned.
+	 * @param array $options Any associated options with, for example, instantiating new objects in
+	 *              which to wrap the data. Options implemented by `cast()` itself:
+	 *              - `first` _boolean_: Used when only one value is passed to `cast()`. Even though
+	 *                that value must be wrapped in an array, setting the `'first'` option to `true`
+	 *                causes only that one value to be returned.
+	 * @return mixed Returns the value of `$data`, cast to the proper format according to the schema
+	 *         definition of the model class specified by `$model`.
+	 */
+	public function cast($entity, array $data, array $options = array()) {
+		$defaults = array('first' => false);
+		$options += $defaults;
+		return $options['first'] ? reset($data) : $data;
+	}
+
+	/**
 	 * Returns the list of methods which format values imported from `Query` objects. Should be
 	 * overridden in subclasses.
 	 *
@@ -233,9 +267,12 @@ abstract class Source extends \lithium\core\Object {
 	 */
 	public function item($model, array $data = array(), array $options = array()) {
 		$defaults = array('class' => 'entity');
-		$type = isset($options['class']) ? $options['class'] : 'entity';
-		$class = isset($this->_classes[$type]) ? $this->_classes[$type] : $this->_classes['entity'];
+		$options += $defaults;
+
+		$type = $options['class'];
+		$class = isset($this->_classes[$type]) ? $this->_classes[$type] : $type;
 		unset($options['class']);
+
 		return new $class(compact('model', 'data') + $options);
 	}
 }

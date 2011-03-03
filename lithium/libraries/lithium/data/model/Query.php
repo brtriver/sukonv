@@ -85,6 +85,7 @@ class Query extends \lithium\core\Object {
 			'conditions' => array(),
 			'fields'     => array(),
 			'model'      => null,
+			'alias'      => null,
 			'source'     => null,
 			'order'      => null,
 			'offset'     => null,
@@ -116,6 +117,9 @@ class Query extends \lithium\core\Object {
 		if ($this->_config['with']) {
 			$this->_associate($this->_config['with']);
 		}
+		if ($this->_entity && !$this->_config['model']) {
+			$this->model($this->_entity->model());
+		}
 		unset($this->_config['entity'], $this->_config['init'], $this->_config['with']);
 	}
 
@@ -129,14 +133,15 @@ class Query extends \lithium\core\Object {
 	}
 
 	/**
-	 * Returns or sets the column mapping scheme for relational databases.
+	 * Generates a schema map of the query's result set, where the keys are fully-namespaced model
+	 * class names, and the values are arrays of field names.
 	 *
-	 * @param array $map Assigns the column map for this query.
-	 * @return void
+	 * @return array
 	 */
 	public function map($map = null) {
 		if ($map !== null) {
 			$this->_map = $map;
+			return $this;
 		}
 		return $this->_map;
 	}
@@ -150,6 +155,7 @@ class Query extends \lithium\core\Object {
 	public function calculate($calculate = null) {
 		if ($calculate) {
 			$this->_config['calculate'] = $calculate;
+			return $this;
 		}
 		return $this->_config['calculate'];
 	}
@@ -166,6 +172,7 @@ class Query extends \lithium\core\Object {
 			$this->_config['model'] = $model;
 			$this->_config['source'] = $model::meta('source');
 			$this->_config['name'] = $model::meta('name');
+			return $this;
 		}
 		return $this->_config['model'];
 	}
@@ -183,6 +190,7 @@ class Query extends \lithium\core\Object {
 			$conditions = (array) $conditions;
 			$this->_config['conditions'] = (array) $this->_config['conditions'];
 			$this->_config['conditions'] = array_merge($this->_config['conditions'], $conditions);
+			return $this;
 		}
 		return $this->_config['conditions'] ?: $this->_entityConditions();
 	}
@@ -220,6 +228,9 @@ class Query extends \lithium\core\Object {
 		} elseif ($fields && !isset($this->_config['fields'][$fields])) {
 			$this->_config['fields'][] = $fields;
 		}
+		if ($fields !== null) {
+			return $this;
+		}
 		return $this->_config['fields'];
 	}
 
@@ -232,6 +243,7 @@ class Query extends \lithium\core\Object {
 	public function limit($limit = null) {
 		if ($limit) {
 			$this->_config['limit'] = intval($limit);
+			return $this;
 		}
 		return $this->_config['limit'];
 	}
@@ -245,6 +257,7 @@ class Query extends \lithium\core\Object {
 	public function offset($offset = null) {
 		if ($offset !== null) {
 			$this->_config['offset'] = intval($offset);
+			return $this;
 		}
 		return $this->_config['offset'];
 	}
@@ -259,6 +272,7 @@ class Query extends \lithium\core\Object {
 		if ($page) {
 			$this->_config['page'] = $page = (intval($page) ?: 1);
 			$this->offset(($page - 1) * $this->_config['limit']);
+			return $this;
 		}
 		return $this->_config['page'];
 	}
@@ -272,6 +286,7 @@ class Query extends \lithium\core\Object {
 	public function order($order = null) {
 		if ($order) {
 			$this->_config['order'] = $order;
+			return $this;
 		}
 		return $this->_config['order'];
 	}
@@ -285,6 +300,7 @@ class Query extends \lithium\core\Object {
 	public function group($group = null) {
 		if ($group) {
 			$this->_config['group'] = $group;
+			return $this;
 		}
 		return $this->_config['group'];
 	}
@@ -300,6 +316,7 @@ class Query extends \lithium\core\Object {
 	public function comment($comment = null) {
 		if ($comment) {
 			$this->_config['comment'] = $comment;
+			return $this;
 		}
 		return $this->_config['comment'];
 	}
@@ -313,6 +330,7 @@ class Query extends \lithium\core\Object {
 	public function &entity(&$entity = null) {
 		if ($entity) {
 			$this->_entity = $entity;
+			return $this;
 		}
 		return $this->_entity;
 	}
@@ -327,7 +345,8 @@ class Query extends \lithium\core\Object {
 		$bind =& $this->_entity;
 
 		if ($data) {
-			return $bind ? $bind->set($data) : $this->_data = array_merge($this->_data, $data);
+			$bind ? $bind->set($data) : $this->_data = array_merge($this->_data, $data);
+			return $this;
 		}
 		$data = $bind ? $bind->data() : $this->_data;
 		return ($list = $this->_config['whitelist']) ? array_intersect_key($data, $list) : $data;
@@ -336,12 +355,19 @@ class Query extends \lithium\core\Object {
 	/**
 	 * Set and get the join queries
 	 *
-	 * @param query|array $joins a single query object or an array of query objects
+	 * @param string $name Optional name of join. Unless two parameters are passed, this parameter
+	 *               is regonized as `$join`.
+	 * @param object|string $join A single query object or an array of query objects
 	 * @return array of query objects
 	 */
-	public function join($joins = null) {
-		if ($joins) {
-			$this->_config['joins'] = array_merge($this->_config['joins'], (array) $joins);
+	public function join($name = null, $join = null) {
+		if ($name && !$join) {
+			$join = $name;
+			$name = null;
+		}
+		if ($join) {
+			$name ? $this->_config['joins'][$name] = $join : $this->_config['joins'][] = $join;
+			return $this;
 		}
 		return $this->_config['joins'];
 	}
@@ -354,12 +380,12 @@ class Query extends \lithium\core\Object {
 	 * @return array Returns an array containing a data source-specific representation of a query.
 	 */
 	public function export(Source $dataSource, array $options = array()) {
-		$defaults = array('data' => array());
+		$defaults = array('keys' => array());
 		$options += $defaults;
 
-		$keys = array_keys($this->_config);
+		$keys = $options['keys'] ?: array_keys($this->_config);
 		$methods = $dataSource->methods();
-		$results = array();
+		$results = array('type' => $this->_type);
 
 		$apply = array_intersect($keys, $methods);
 		$copy = array_diff($keys, $apply);
@@ -368,14 +394,27 @@ class Query extends \lithium\core\Object {
 			$results[$item] = $dataSource->{$item}($this->{$item}(), $this);
 		}
 		foreach ($copy as $item) {
-			$results[$item] = $this->_config[$item];
+			if (in_array($item, $keys)) {
+				$results[$item] = $this->_config[$item];
+			}
 		}
 		$entity =& $this->_entity;
-		$data = $entity ? $entity->export($dataSource, $options['data']) : $this->_data;
-		$data = ($list = $this->_config['whitelist']) ? array_intersect_key($data, $list) : $data;
-		$results += compact('data');
+		$data = $this->_data;
 
-		$results['source'] = $dataSource->name($this->_config['source']);
+		if ($entity) {
+			$data = $entity->export(array('whitelist' => $this->_config['whitelist']));
+		} elseif ($list = $this->_config['whitelist']) {
+			$list = array_combine($list, $list);
+			$data = array('update' => array_intersect_key($data, $list));
+		}
+		$results['data'] = $data;
+
+		if (isset($results['source'])) {
+			$results['source'] = $dataSource->name($results['source']);
+		}
+		if (!isset($results['fields'])) {
+			return $results;
+		}
 		$created = array('fields', 'values');
 
 		if (is_array($results['fields']) && array_keys($results['fields']) == $created) {
@@ -384,14 +423,35 @@ class Query extends \lithium\core\Object {
 		return $results;
 	}
 
-	/**
-	 * Generates a schema map of the query's result set, where the keys are fully-namespaced model
-	 * class names, and the values are arrays of field names.
-	 *
-	 * @param object $dataSource An instance of the data source used to create the map.
-	 * @return array
-	 */
-	public function schema($dataSource) {
+	public function schema($field = null) {
+		if (is_array($field)) {
+			$this->_config['schema'] = $field;
+			return $this;
+		}
+
+		if (isset($this->_config['schema'])) {
+			$schema = $this->_config['schema'];
+
+			if ($field) {
+				return isset($schema[$field]) ? $schema[$field] : null;
+			}
+			return $schema;
+		}
+
+		if ($model = $this->model()) {
+			return $model::schema($field);
+		}
+	}
+
+	public function alias($alias = null) {
+		if ($alias) {
+			$this->_config['alias'] = $alias;
+			return $this;
+		}
+		if (!$this->_config['alias'] && ($model = $this->_config['model'])) {
+			$this->_config['alias'] = $model::meta('name');
+		}
+		return $this->_config['alias'];
 	}
 
 	/**
@@ -404,6 +464,7 @@ class Query extends \lithium\core\Object {
 	public function __call($method, $params = array()) {
 		if ($params) {
 			$this->_config[$method] = current($params);
+			return $this;
 		}
 		return isset($this->_config[$method]) ? $this->_config[$method] : null;
 	}
@@ -412,7 +473,8 @@ class Query extends \lithium\core\Object {
 	 * Will return a find first condition on the associated model if a record is connected.
 	 * Called by conditions when it is called as a get and no condition is set.
 	 *
-	 * @return array ([model's primary key'] => [that key set in the record]).
+	 * @return array Returns an array in the following format:
+	 *         `([model's primary key'] => [that key set in the record])`.
 	 */
 	protected function _entityConditions() {
 		if (!$this->_entity || !($model = $this->_config['model'])) {
@@ -422,7 +484,8 @@ class Query extends \lithium\core\Object {
 			return $key;
 		}
 		$key = $model::meta('key');
-		return array($key => $this->_entity->{$key});
+		$val = $this->_entity->{$key};
+		return $val ? array($key => $val) : array();
 	}
 
 	protected function _associate($related) {

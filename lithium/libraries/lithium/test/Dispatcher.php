@@ -8,10 +8,10 @@
 
 namespace lithium\test;
 
-use \lithium\util\Set;
-use \lithium\util\Inflector;
-use \lithium\core\Libraries;
-use \lithium\core\Environment;
+use lithium\util\Set;
+use lithium\util\Inflector;
+use lithium\core\Libraries;
+use lithium\core\Environment;
 
 /**
  * The Lithium Test Dispatcher
@@ -27,8 +27,8 @@ class Dispatcher extends \lithium\core\StaticObject {
 	 * @var array Key/value array of short identifier for the fully-namespaced class.
 	 */
 	protected static $_classes = array(
-		'group' => '\lithium\test\Group',
-		'report' => '\lithium\test\Report'
+		'group' => 'lithium\test\Group',
+		'report' => 'lithium\test\Report'
 	);
 
 	/**
@@ -59,7 +59,7 @@ class Dispatcher extends \lithium\core\StaticObject {
 		$group = static::_group($items);
 		$report = static::_report($group, $options);
 
-		return static::_filter(__METHOD__, compact('report'), function($self, $params, $chain) {
+		return static::_filter(__FUNCTION__, compact('report'), function($self, $params, $chain) {
 			$environment = Environment::get();
 			Environment::set('test');
 

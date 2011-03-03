@@ -8,7 +8,8 @@
 
 namespace lithium\storage\session\adapter;
 
-use \lithium\util\Set;
+use lithium\util\Set;
+use lithium\util\Inflector;
 
 /**
  * A minimal adapter to interface with HTTP cookies.
@@ -51,7 +52,10 @@ class Cookie extends \lithium\core\Object {
 	 */
 	protected function _init() {
 		parent::_init();
-		$this->_config['name'] = $this->_config['name'] ?: basename(LITHIUM_APP_PATH) . 'cookie';
+
+		if (!$this->_config['name']) {
+			$this->_config['name'] = Inflector::slug(basename(LITHIUM_APP_PATH)) . 'cookie';
+		}
 	}
 
 	/**
@@ -91,7 +95,7 @@ class Cookie extends \lithium\core\Object {
 	public function check($key) {
 		$config = $this->_config;
 
-		return function($self, $params, $chain) use (&$config) {
+		return function($self, $params) use (&$config) {
 			return (isset($_COOKIE[$config['name']][$params['key']]));
 		};
 	}
@@ -107,7 +111,7 @@ class Cookie extends \lithium\core\Object {
 	public function read($key = null, array $options = array()) {
 		$config = $this->_config;
 
-		return function($self, $params, $chain) use (&$config) {
+		return function($self, $params) use (&$config) {
 			$key = $params['key'];
 			if (!$key) {
 				return $_COOKIE;
@@ -136,7 +140,7 @@ class Cookie extends \lithium\core\Object {
 	 * @return boolean True on successful write, false otherwise.
 	 */
 	public function write($key, $value = null, array $options = array()) {
-		$expire = !isset($options['expire']) && empty($this->_config['expire']);
+		$expire = (!isset($options['expire']) && empty($this->_config['expire']));
 		$config = $this->_config;
 
 		if ($expire && $key != $config['name']) {
@@ -144,7 +148,7 @@ class Cookie extends \lithium\core\Object {
 		}
 		$expires = (isset($options['expire'])) ? $options['expire'] : $config['expire'];
 
-		return function($self, $params, $chain) use (&$config, &$expires) {
+		return function($self, $params) use (&$config, &$expires) {
 			$key = $params['key'];
 			$value = $params['value'];
 			$key = is_array($key) ? Set::flatten($key) : array($key => $value);
@@ -183,7 +187,7 @@ class Cookie extends \lithium\core\Object {
 	public function delete($key, array $options = array()) {
 		$config = $this->_config;
 
-		return function($self, $params, $chain) use (&$config) {
+		return function($self, $params) use (&$config) {
 			$key = $params['key'];
 			$key = is_array($key) ? Set::flatten($key) : array($key);
 

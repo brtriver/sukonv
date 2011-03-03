@@ -8,10 +8,11 @@
 
 namespace lithium\analysis;
 
-use \Exception;
-use \ReflectionClass;
-use \ReflectionException;
-use \lithium\core\Libraries;
+use Exception;
+use ReflectionClass;
+use ReflectionProperty;
+use ReflectionException;
+use lithium\core\Libraries;
 
 /**
  * General source code inspector.
@@ -162,14 +163,14 @@ class Inspector extends \lithium\core\StaticObject {
 	 *
 	 * @param mixed $class Class name as a string or object instance.
 	 * @param array $options Set of options:
-	 *        -'self': If true (default), only returns lines of methods defined in `$class`,
-	 *         excluding methods from inherited classes.
-	 *        -'methods': An arbitrary list of methods to search, as a string (single method name)
-	 *         or array of method names.
-	 *        -'filter': If true, filters out lines containing only whitespace or braces. Note: for
-	 *         some reason, the Zend engine does not report `switch` and `try` statements as
-	 *         executable lines, as well as parts of multi-line assignment statements, so they are
-	 *         filtered out as well.
+	 *        - `'self'` _boolean_: If `true` (default), only returns lines of methods defined in
+	 *          `$class`, excluding methods from inherited classes.
+	 *        - `'methods'` _array_: An arbitrary list of methods to search, as a string (single
+	 *          method name) or array of method names.
+	 *        - `'filter'` _boolean_: If `true`, filters out lines containing only whitespace or
+	 *          braces. Note: for some reason, the Zend engine does not report `switch` and `try`
+	 *          statements as executable lines, as well as parts of multi-line assignment
+	 *          statements, so they are filtered out as well.
 	 * @return array Returns an array of the executable line numbers of the class.
 	 */
 	public static function executable($class, array $options = array()) {
@@ -185,15 +186,19 @@ class Inspector extends \lithium\core\StaticObject {
 				function($str) { return preg_quote($str, '/'); },
 				$options['blockOpeners']
 			)));
-			$options['pattern'] = "/^(({$pattern})|\\$(.+)\($)/";
+			$pattern = join('|', array(
+				"({$pattern})",
+				"\\$(.+)\($",
+				"\s*['\"]\w+['\"]\s*=>\s*.+[\{\(]$",
+			));
+			$options['pattern'] = "/^({$pattern})/";
 		}
 
 		if (!$class instanceof ReflectionClass) {
 			$class = new ReflectionClass(is_object($class) ? get_class($class) : $class);
 		}
-		$result = array_filter(static::methods($class, 'ranges', $options + array(
-			'group' => false
-		)));
+		$options += array('group' => false);
+		$result = array_filter(static::methods($class, 'ranges', $options));
 
 		if ($options['filter'] && $class->getFileName()) {
 			$file = explode("\n", "\n" . file_get_contents($class->getFileName()));
@@ -290,28 +295,25 @@ class Inspector extends \lithium\core\StaticObject {
 		}
 		$options += array('names' => $options['properties']);
 
-		return static::_items($class, 'getProperties', $options)->map(
-			function($item) {
-				$class = __CLASS__;
-				$modifiers = array_values($class::invokeMethod('_modifiers', array($item)));
-				$setAccess = (
-					array_intersect($modifiers, array('private', 'protected')) != array()
-				);
-				if ($setAccess) {
-					$item->setAccessible(true);
-				}
-				$result = compact('modifiers') + array(
-					'docComment' => $item->getDocComment(),
-					'name' => $item->getName(),
-					'value' => $item->getValue($item->getDeclaringClass())
-				);
-				if ($setAccess) {
-					$item->setAccessible(false);
-				}
-				return $result;
-			},
-			array('collect' => false)
-		);
+		return static::_items($class, 'getProperties', $options)->map(function($item) {
+			$class = __CLASS__;
+			$modifiers = array_values($class::invokeMethod('_modifiers', array($item)));
+			$setAccess = (
+				array_intersect($modifiers, array('private', 'protected')) != array()
+			);
+			if ($setAccess) {
+				$item->setAccessible(true);
+			}
+			$result = compact('modifiers') + array(
+				'docComment' => $item->getDocComment(),
+				'name' => $item->getName(),
+				'value' => $item->getValue($item->getDeclaringClass())
+			);
+			if ($setAccess) {
+				$item->setAccessible(false);
+			}
+			return $result;
+		}, array('collect' => false));
 	}
 
 	/**
@@ -486,7 +488,13 @@ class Inspector extends \lithium\core\StaticObject {
 	protected static function _items($class, $method, $options) {
 		$defaults = array('names' => array(), 'self' => true, 'public' => true);
 		$options += $defaults;
-		$data = $class->{$method}();
+
+		$params = array(
+			'getProperties' => ReflectionProperty::IS_PUBLIC | (
+				$options['public'] ? 0 : ReflectionProperty::IS_PROTECTED
+			)
+		);
+		$data = isset($params[$method]) ? $class->{$method}($params[$method]) : $class->{$method}();
 
 		if (!empty($options['names'])) {
 			$data = array_filter($data, function($item) use ($options) {

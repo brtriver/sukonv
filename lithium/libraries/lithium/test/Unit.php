@@ -9,11 +9,11 @@
 namespace lithium\test;
 
 use \Exception;
-use \lithium\util\String;
-use \lithium\core\Libraries;
-use \lithium\util\Validator;
-use \lithium\analysis\Debugger;
-use \lithium\analysis\Inspector;
+use lithium\util\String;
+use lithium\core\Libraries;
+use lithium\util\Validator;
+use lithium\analysis\Debugger;
+use lithium\analysis\Inspector;
 use \RecursiveDirectoryIterator;
 use \RecursiveIteratorIterator;
 
@@ -222,14 +222,13 @@ class Unit extends \lithium\core\Object {
 			}
 			$i++;
 		}
-		$result = array(
+		$class = isset($trace[$i - 1]['object']) ? get_class($trace[$i - 1]['object']) : null;
+
+		$result = compact('class', 'message', 'data') + array(
 			'file'      => $trace[$i - 1]['file'],
 			'line'      => $trace[$i - 1]['line'],
 			'method'    => $trace[$i]['function'],
 			'assertion' => $trace[$i - 1]['function'],
-			'class'     => get_class($trace[$i - 1]['object']),
-			'message'   => $message,
-			'data'      => $data,
 		);
 		$this->_result(($expression ? 'pass' : 'fail'), $result);
 		return $expression;
@@ -527,12 +526,10 @@ class Unit extends \lithium\core\Object {
 	 * @param array $headers When empty, value of `headers_list()` is used.
 	 */
 	public function assertCookie($expected, $headers = null) {
-		$defaults = array('path' => '/', 'name' => '\w+');
+		$defaults = array('path' => '/', 'name' => '[\w.-]+');
 		$expected += $defaults;
 
-		if (empty($headers)) {
-			$headers = headers_list();
-		}
+		$headers = ($headers) ?: headers_list();
 		$value = preg_quote(urlencode($expected['value']), '/');
 
 		$key = explode('.', $expected['key']);
@@ -785,7 +782,21 @@ class Unit extends \lithium\core\Object {
 					$data[] = $compare;
 				}
 			}
-			return $data;
+			if (!empty($data)) {
+				return $data;
+			}
+		}
+
+		if (!is_scalar($result)) {
+			$data = $this->_compare($type, $result, $expected);
+
+			if (!empty($data)) {
+				return array(
+					'trace' => $data['trace'],
+					'expected' => $data['result'],
+					'result' => $data['expected']
+				);
+			}
 		}
 
 		if ($type === 'identical') {

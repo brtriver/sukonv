@@ -8,7 +8,7 @@
 
 namespace lithium\tests\cases\net\http;
 
-use \lithium\net\http\Message;
+use lithium\net\http\Message;
 
 class MessageTest extends \lithium\test\Unit {
 
@@ -57,8 +57,7 @@ class MessageTest extends \lithium\test\Unit {
 	}
 
 	public function testType() {
-		$result = $this->message->type("json");
-		$this->assertEqual('json', $result);
+		$this->assertEqual('json', $this->message->type("json"));
 		$this->assertEqual('json', $this->message->type());
 
 		$expected = 'json';

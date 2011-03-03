@@ -9,6 +9,7 @@
 namespace lithium\action;
 
 use UnexpectedValueException;
+use BadMethodCallException;
 
 /**
  * A `Response` object is typically instantiated automatically by the `Controller`. It is assigned
@@ -28,25 +29,24 @@ class Response extends \lithium\net\http\Response {
 	 *
 	 * @var array
 	 */
-	protected $_classes = array('router' => '\lithium\net\http\Router');
+	protected $_classes = array(
+		'router' => 'lithium\net\http\Router',
+		'media' => 'lithium\net\http\Media'
+	);
 
 	public function __construct(array $config = array()) {
-		$defaults = array(
-			'buffer' => 8192, 'request' => null, 'location' => null, 'status' => null
-		);
+		$defaults = array('buffer' => 8192, 'location' => null, 'status' => 0, 'request' => null);
 		parent::__construct($config + $defaults);
 	}
 
 	protected function _init() {
-		$this->status($this->_config['status']);
+		$config = $this->_config;
+		$this->status($config['status']);
 		unset($this->_config['status']);
 
-		if ($this->_config['request'] && is_object($this->_config['request'])) {
-			$this->_type = $this->_config['request']->accepts();
-		}
-		if ($this->_config['location']) {
-			$router = $this->_classes['router'];
-			$location = $router::match($this->_config['location'], $this->_config['request']);
+		if ($config['location']) {
+			$classes = $this->_classes;
+			$location = $classes['router']::match($config['location'], $config['request']);
 			$this->headers('location', $location);
 		}
 		parent::_init();
@@ -59,7 +59,8 @@ class Response extends \lithium\net\http\Response {
 	 * @deprecated
 	 */
 	public function disableCache() {
-		$this->cache(false);
+		$message = 'Request::disableCache() is deprecated. Please use Request::cache(false).';
+		throw new BadMethodCallException($message);
 	}
 
 	/**
@@ -73,19 +74,22 @@ class Response extends \lithium\net\http\Response {
 	 */
 	public function cache($expires) {
 		if ($expires === false) {
-			$control = array("no-store, no-cache, must-revalidate", "post-check=0, pre-check=0");
-			$expiration = "Mon, 26 Jul 1997 05:00:00 GMT";
-			$lastModified = gmdate("D, d M Y H:i:s") . " GMT";
-			$pragma = 'no-cache';
-		} else {
-			$expires = intval($expires) ? $expires : strtotime($expires);
+			return $this->headers(array(
+				'Expires' => 'Mon, 26 Jul 1997 05:00:00 GMT',
+				'Cache-Control' => array(
+					'no-store, no-cache, must-revalidate',
+					'post-check=0, pre-check=0',
+					'max-age=0',
+				),
+				'Pragma' => 'no-cache',
+			));
 		}
+		$expires = is_int($expires) ? $expires : strtotime($expires);
 
-		$this->headers(array(
-			'Expires' => $expiration,
-			'Last-Modified' => $lastModified,
-			'Cache-Control' => $control,
-			'Pragma' => $pragma,
+		return $this->headers(array(
+			'Expires' => gmdate('D, d M Y H:i:s', $expires) . ' GMT',
+			'Cache-Control' => 'max-age=' . ($expires - time()),
+			'Pragma' => 'cache',
 		));
 	}
 
@@ -101,7 +105,6 @@ class Response extends \lithium\net\http\Response {
 		if (isset($this->headers['location']) && $this->status['code'] === 200) {
 			$code = 302;
 		}
-
 		if (!$status = $this->status($code)) {
 			throw new UnexpectedValueException('Invalid status code');
 		}

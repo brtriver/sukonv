@@ -34,6 +34,11 @@ class Curl extends \lithium\net\Socket {
 	 */
 	public $options = array();
 
+	public function __construct(array $config = array()) {
+		$defaults = array('ignoreExpect' => true);
+		parent::__construct($config + $defaults);
+	}
+
 	/**
 	 * Opens a curl connection and initializes the internal resource handle.
 	 *
@@ -180,21 +185,20 @@ class Curl extends \lithium\net\Socket {
 	public function send($message, array $options = array()) {
 		$defaults = array('response' => $this->_classes['response']);
 		$options += $defaults;
-
 		$this->set(CURLOPT_URL, $message->to('url'));
 
+		if ($this->_config['ignoreExpect']) {
+			$message->headers('Expect', ' ');
+		}
 		if (isset($message->headers)) {
 			$this->set(CURLOPT_HTTPHEADER, $message->headers());
 		}
 		if (isset($message->method) && $message->method == 'POST') {
-			$this->set(array(
-				CURLOPT_POST => true,
-				CURLOPT_POSTFIELDS => $message->body()
-			));
+			$this->set(array(CURLOPT_POST => true, CURLOPT_POSTFIELDS => $message->body()));
 		}
 		if ($message = $this->write($message)) {
-			$body = $message ?: $this->read();
-			return new $options['response'](compact('body'));
+			$message = $message ?: $this->read();
+			return $this->_instance($options['response'], compact('message'));
 		}
 	}
 }

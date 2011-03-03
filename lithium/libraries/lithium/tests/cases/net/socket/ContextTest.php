@@ -9,7 +9,8 @@
 namespace lithium\tests\cases\net\socket;
 
 use lithium\net\http\Request;
-use \lithium\net\socket\Context;
+use lithium\net\http\Response;
+use lithium\net\socket\Context;
 
 class ContextTest extends \lithium\test\Unit {
 
@@ -25,6 +26,8 @@ class ContextTest extends \lithium\test\Unit {
 
 	public function setUp() {
 		$this->socket = new Context($this->_testConfig);
+		$message = "Could not open {$this->_testUrl} - skipping " . __CLASS__;
+		$this->skipIf(!fopen($this->_testUrl, 'r'), $message);
 	}
 
 	public function tearDown() {
@@ -72,9 +75,9 @@ class ContextTest extends \lithium\test\Unit {
 		$this->assertTrue(is_resource($stream->open()));
 		$this->assertTrue(is_resource($stream->resource()));
 
-		$response = $stream->send(new Request(), array(
-			'response' => 'lithium\net\http\Response'
-		));
+		$response = $stream->send(new Request(), array('response' => 'lithium\net\http\Response'));
+		$this->assertTrue($response instanceof Response);
+
 		$this->assertEqual(trim(file_get_contents($this->_testUrl)), trim($response->body()));
 		$this->assertTrue($stream->eof());
 	}

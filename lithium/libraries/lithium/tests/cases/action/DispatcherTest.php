@@ -8,11 +8,11 @@
 
 namespace lithium\tests\cases\action;
 
-use \lithium\action\Request;
-use \lithium\action\Response;
-use \lithium\net\http\Router;
-use \lithium\action\Dispatcher;
-use \lithium\tests\mocks\action\MockDispatcher;
+use lithium\action\Request;
+use lithium\action\Response;
+use lithium\net\http\Router;
+use lithium\action\Dispatcher;
+use lithium\tests\mocks\action\MockDispatcher;
 
 class DispatcherTest extends \lithium\test\Unit {
 
@@ -43,6 +43,55 @@ class DispatcherTest extends \lithium\test\Unit {
 	public function testRunWithNoRouting() {
 		$this->expectException('/Could not route request/');
 		MockDispatcher::run(new Request(array('url' => '/')));
+	}
+
+	public function testApplyRulesControllerCasing() {
+		$params = array('controller' => 'test', 'action' => 'test');
+		$expected = array('controller' => 'Test', 'action' => 'test');
+		$this->assertEqual($expected, Dispatcher::applyRules($params));
+
+		$params = array('controller' => 'Test', 'action' => 'test');
+		$this->assertEqual($params, Dispatcher::applyRules($params));
+
+		$params = array('controller' => 'test_one', 'action' => 'test');
+		$expected = array('controller' => 'TestOne', 'action' => 'test');
+		$this->assertEqual($expected, Dispatcher::applyRules($params));
+	}
+
+	public function testApplyRulesWithNamespacedController() {
+		$params = array('controller' => 'li3_test\\Test', 'action' => 'test');
+		$expected = array('controller' => 'li3_test\\Test', 'action' => 'test');
+		$this->assertEqual($expected, Dispatcher::applyRules($params));
+	}
+
+	public function testApplyRulesDotNamespacing() {
+		$params = array('controller' => 'li3_test.test', 'action' => 'test');
+		$expected = array(
+			'library' => 'li3_test', 'controller' => 'li3_test.Test', 'action' => 'test'
+		);
+		$this->assertEqual($expected, Dispatcher::applyRules($params));
+	}
+
+	public function testApplyRulesLibraryKeyNamespacing() {
+		$params = array('library' => 'li3_test', 'controller' => 'test', 'action' => 'test');
+		$expected = array(
+			'library' => 'li3_test', 'controller' => 'li3_test.Test', 'action' => 'test'
+		);
+		$this->assertEqual($expected, Dispatcher::applyRules($params));
+	}
+
+	public function testApplyRulesNamespacingCollision() {
+		$params = array('library' => 'li3_one', 'controller' => 'li3_two.test', 'action' => 'test');
+		$expected = array(
+			'library' => 'li3_one', 'controller' => 'li3_two.Test', 'action' => 'test'
+		);
+		$this->assertEqual($expected, Dispatcher::applyRules($params));
+
+		$params = array('library' => 'li3_one', 'controller' => 'li3_two\Test', 'action' => 'test');
+		$expected = array(
+			'library' => 'li3_one', 'controller' => 'li3_two\Test', 'action' => 'test'
+		);
+		$this->assertEqual($expected, Dispatcher::applyRules($params));
 	}
 
 	public function testConfigManipulation() {

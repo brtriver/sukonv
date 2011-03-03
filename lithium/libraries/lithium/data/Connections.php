@@ -8,9 +8,9 @@
 
 namespace lithium\data;
 
-use \Exception;
-use \lithium\util\String;
-use \lithium\core\Libraries;
+use Exception;
+use lithium\util\String;
+use lithium\core\Libraries;
 
 /**
  * The `Connections` class manages a list of named configurations that connect to external
@@ -33,7 +33,7 @@ class Connections extends \lithium\core\Adaptable {
 	/**
 	 * A Collection of the configurations you add through Connections::add().
 	 *
-	 * @var `\lithium\util\Collection`
+	 * @var `lithium\util\Collection`
 	 */
 	protected static $_configurations = array();
 
@@ -140,10 +140,20 @@ class Connections extends \lithium\core\Adaptable {
 	 * @return mixed A configured instance of the connection, or an array of the configuration used.
 	 */
 	public static function get($name = null, array $options = array()) {
+		static $mockAdapter;
+
 		$defaults = array('config' => false, 'autoCreate' => true);
 		$options += $defaults;
 
-		if (empty($name)) {
+		if ($name === false) {
+			if (!$mockAdapter) {
+				$class = Libraries::locate('data.source', 'Mock');
+				$mockAdapter = new $class();
+			}
+			return $mockAdapter;
+		}
+
+		if (!$name) {
 			return array_keys(static::$_configurations);
 		}
 

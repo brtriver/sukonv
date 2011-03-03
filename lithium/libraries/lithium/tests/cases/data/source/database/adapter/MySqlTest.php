@@ -8,10 +8,10 @@
 
 namespace lithium\tests\cases\data\source\database\adapter;
 
-use \lithium\data\Connections;
-use \lithium\data\model\Query;
-use \lithium\data\source\database\adapter\MySql;
-use \lithium\tests\mocks\data\source\database\adapter\MockMySql;
+use lithium\data\Connections;
+use lithium\data\model\Query;
+use lithium\data\source\database\adapter\MySql;
+use lithium\tests\mocks\data\source\database\adapter\MockMySql;
 
 class MySqlTest extends \lithium\test\Unit {
 
@@ -62,8 +62,21 @@ class MySqlTest extends \lithium\test\Unit {
 	 */
 	public function testDatabaseConnection() {
 		$db = new MySql(array('autoConnect' => false) + $this->_dbConfig);
+
 		$this->assertTrue($db->connect());
 		$this->assertTrue($db->isConnected());
+
+		$this->assertTrue($db->disconnect());
+		$this->assertFalse($db->isConnected());
+
+		$db = new MySQL(array(
+			'autoConnect' => false, 'encoding' => NULL,'persistent' => false,
+			'host' => 'localhost:3306', 'login' => 'garbage', 'password' => '',
+			'database' => 'garbage', 'init' => true
+		) + $this->_dbConfig);
+
+		$this->assertFalse($db->connect());
+		$this->assertFalse($db->isConnected());
 
 		$this->assertTrue($db->disconnect());
 		$this->assertFalse($db->isConnected());
@@ -218,6 +231,17 @@ class MySqlTest extends \lithium\test\Unit {
 		);
 		$this->assertEqual($expected, $result);
 
+		$delete = new Query(array('type' => 'delete', 'source' => 'companies'));
+		$this->assertTrue($this->db->delete($delete));
+	}
+
+	/**
+	 * Ensures that DELETE queries are not generated with table aliases, as MySQL does not support
+	 * this.
+	 *
+	 * @return void
+	 */
+	public function testDeletesWithoutAliases() {
 		$delete = new Query(array('type' => 'delete', 'source' => 'companies'));
 		$this->assertTrue($this->db->delete($delete));
 	}

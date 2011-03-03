@@ -8,8 +8,8 @@
 
 namespace lithium\test\filter;
 
-use \lithium\analysis\Parser;
-use \lithium\analysis\Inspector;
+use lithium\analysis\Parser;
+use lithium\analysis\Inspector;
 
 /**
  * Calculates the cyclomatic complexity of class methods, and shows worst-offenders and statistics.
@@ -38,10 +38,9 @@ class Complexity extends \lithium\test\Filter {
 		foreach ($tests->invoke('subject') as $class) {
 			$results[$class] = array();
 
-			if (!$methods = Inspector::methods($class, 'ranges')) {
+			if (!$methods = Inspector::methods($class, 'ranges', array('public' => false))) {
 				continue;
 			}
-
 			foreach ($methods as $method => $lines) {
 				$lines = Inspector::lines($class, $lines);
 				$branches = Parser::tokenize(join("\n", (array) $lines), array(

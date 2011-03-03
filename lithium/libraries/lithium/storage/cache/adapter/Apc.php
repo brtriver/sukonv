@@ -48,7 +48,7 @@ class Apc extends \lithium\core\Object {
 	public function __construct(array $config = array()) {
 		$defaults = array(
 			'prefix' => '',
-			'expiry' => '+1 hour'
+			'expiry' => '+1 hour',
 		);
 		parent::__construct($config + $defaults);
 	}
@@ -69,8 +69,8 @@ class Apc extends \lithium\core\Object {
 	public function write($key, $data, $expiry = null) {
 		$expiry = ($expiry) ?: $this->_config['expiry'];
 
-		return function($self, $params, $chain) use ($expiry) {
-			$cachetime = strtotime($expiry) - date('U');
+		return function($self, $params) use ($expiry) {
+			$cachetime = (is_int($expiry) ? $expiry : strtotime($expiry)) - time();
 			$key = $params['key'];
 
 			if (is_array($key)) {
@@ -91,7 +91,7 @@ class Apc extends \lithium\core\Object {
 	 * @return mixed Cached value if successful, false otherwise.
 	 */
 	public function read($key) {
-		return function($self, $params, $chain) {
+		return function($self, $params) {
 			return apc_fetch($params['key']);
 		};
 	}
@@ -107,7 +107,7 @@ class Apc extends \lithium\core\Object {
 	 * @return mixed True on successful delete, false otherwise.
 	 */
 	public function delete($key) {
-		return function($self, $params, $chain) {
+		return function($self, $params) {
 			return apc_delete($params['key']);
 		};
 	}
@@ -124,7 +124,7 @@ class Apc extends \lithium\core\Object {
 	 * @return mixed Item's new value on successful decrement, false otherwise
 	 */
 	public function decrement($key, $offset = 1) {
-		return function($self, $params, $chain) use ($offset) {
+		return function($self, $params) use ($offset) {
 			return apc_dec($params['key'], $offset);
 		};
 	}
@@ -141,7 +141,7 @@ class Apc extends \lithium\core\Object {
 	 * @return mixed Item's new value on successful increment, false otherwise
 	 */
 	public function increment($key, $offset = 1) {
-		return function($self, $params, $chain) use ($offset) {
+		return function($self, $params) use ($offset) {
 			return apc_inc($params['key'], $offset);
 		};
 	}
@@ -162,10 +162,10 @@ class Apc extends \lithium\core\Object {
 	 * return boolean True if enabled, false otherwise
 	 */
 	public static function enabled() {
-		if (php_sapi_name() === 'cli') {
-			return (extension_loaded('apc') && ini_get('apc.enable_cli'));
-		}
-		return (extension_loaded('apc') && ini_get('apc.enabled'));
+		$loaded = extension_loaded('apc');
+		$isCli = (php_sapi_name() === 'cli');
+		$enabled = (!$isCli && ini_get('apc.enabled')) || ($isCli && ini_get('apc.enable_cli'));
+		return ($loaded && $enabled);
 	}
 }
 

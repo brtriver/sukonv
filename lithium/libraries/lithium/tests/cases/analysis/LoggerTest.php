@@ -8,9 +8,9 @@
 
 namespace lithium\tests\cases\analysis;
 
-use \lithium\analysis\Logger;
-use \lithium\util\Collection;
-use \lithium\tests\mocks\analysis\MockLoggerAdapter;
+use lithium\analysis\Logger;
+use lithium\util\Collection;
+use lithium\tests\mocks\analysis\MockLoggerAdapter;
 
 /**
  * Logger adapter test case
@@ -67,7 +67,9 @@ class LoggerTest extends \lithium\test\Unit {
 		$base = LITHIUM_APP_PATH . '/resources/tmp/logs';
 		$this->skipIf(!is_writable($base), "{$base} is not writable.");
 
-		$config = array('default' => array('adapter' => 'File', 'timestamp' => false));
+		$config = array('default' => array(
+			'adapter' => 'File', 'timestamp' => false, 'format' => "{:message}\n"
+		));
 		Logger::config($config);
 
 		$result = Logger::write('info', 'Message line 1');
@@ -97,7 +99,10 @@ class LoggerTest extends \lithium\test\Unit {
 		$this->skipIf(!is_writable($base), "{$base} is not writable.");
 
 		Logger::config(array('default' => array(
-			'adapter' => 'File', 'timestamp' => false, 'priority' => false
+			'adapter' => 'File',
+			'timestamp' => false,
+			'priority' => false,
+			'format' => "{:message}\n"
 		)));
 
 		$this->assertFalse(file_exists($base . '/info.log'));

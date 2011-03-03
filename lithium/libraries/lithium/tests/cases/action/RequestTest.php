@@ -8,9 +8,9 @@
 
 namespace lithium\tests\cases\action;
 
-use \lithium\action\Request;
-use \lithium\tests\mocks\action\MockIisRequest;
-use \lithium\tests\mocks\action\MockCgiRequest;
+use lithium\action\Request;
+use lithium\tests\mocks\action\MockIisRequest;
+use lithium\tests\mocks\action\MockCgiRequest;
 
 class RequestTest extends \lithium\test\Unit {
 
@@ -234,6 +234,14 @@ class RequestTest extends \lithium\test\Unit {
 
 		$this->assertTrue($request->is('cool'));
 		$this->assertFalse($request->is('foo'));
+
+		$request = new Request(array('env' => array(
+			'HTTP_USER_AGENT' => 'Mozilla/5.0 (iPhone; U; XXXXX like Mac OS X; en) AppleWebKit/420+'
+		)));
+
+		$request->detect('iPhone', array('HTTP_USER_AGENT', '/iPhone/'));
+		$isiPhone = $request->is('iPhone'); // returns true if 'iPhone' appears anywhere in the UA
+		$this->assertTrue($isiPhone);
 	}
 
 	public function testDetectWithClosure() {
@@ -265,6 +273,17 @@ class RequestTest extends \lithium\test\Unit {
 		$this->assertEqual($expected, $result);
 	}
 
+	public function testDetectSsl() {
+		$request = new Request(array('env' => array('SCRIPT_URI' => null, 'HTTPS' => 'off')));
+		$this->assertFalse($request->env('HTTPS'));
+
+		$request = new Request(array('env' => array('SCRIPT_URI' => null, 'HTTPS' => 'on')));
+		$this->assertTrue($request->env('HTTPS'));
+
+		$request = new Request(array('env' => array('SCRIPT_URI' => null, 'HTTPS' => null)));
+		$this->assertFalse($request->env('HTTPS'));
+	}
+
 	public function testContentTypeDetection() {
 		$request = new Request(array('env' => array(
 			'CONTENT_TYPE' => 'application/json; charset=UTF-8',
@@ -276,7 +295,16 @@ class RequestTest extends \lithium\test\Unit {
 	}
 
 	public function testIsMobile() {
-		$request = new Request(array('env' => array('HTTP_USER_AGENT' => 'iPhone')));
+		$iPhone = 'Mozilla/5.0 (iPhone; U; CPU like Mac OS X; en) AppleWebKit/420+ (KHTML, like ';
+		$iPhone .= 'Gecko) Version/3.0 Mobile/1A535b Safari/419.3';
+
+		$request = new Request(array('env' => array('HTTP_USER_AGENT' => $iPhone)));
+		$this->assertTrue($request->is('mobile'));
+
+		$android = 'Mozilla/5.0 (Linux; U; Android 0.5; en-us) AppleWebKit/522+ (KHTML, like ';
+		$android .= 'Gecko) Safari/419.3';
+
+		$request = new Request(array('env' => array('HTTP_USER_AGENT' => $android)));
 		$this->assertTrue($request->is('mobile'));
 	}
 
@@ -331,10 +359,11 @@ class RequestTest extends \lithium\test\Unit {
 	public function testMagicParamsAccess() {
 		$this->assertNull($this->request->action);
 		$this->assertFalse(isset($this->request->params['action']));
+		$this->assertFalse(isset($this->request->action));
 
 		$expected = $this->request->params['action'] = 'index';
-		$result = $this->request->action;
-		$this->assertEqual($expected, $result);
+		$this->assertEqual($expected, $this->request->action);
+		$this->assertTrue(isset($this->request->action));
 	}
 
 	public function testSingleFileNormalization() {
@@ -837,6 +866,90 @@ class RequestTest extends \lithium\test\Unit {
 		$this->assertEqual('html', $request->accepts());
 
 		$request = new Request(array('env' => array('HTTP_ACCEPT' => null)));
+		$this->assertEqual('html', $request->accepts());
+	}
+
+	/**
+	 * Tests that accepted content-types without a `q` value are sorted in the order they appear in
+	 * the `HTTP_ACCEPT` header.
+	 */
+	public function testAcceptTypeOrder() {
+		$request = new Request(array('env' => array(
+			'HTTP_ACCEPT' => 'application/xhtml+xml,text/html'
+		)));
+		$expected = array('application/xhtml+xml', 'text/html');
+		$this->assertEqual($expected, $request->accepts(true));
+
+		$request = new Request(array('env' => array(
+			'HTTP_USER_AGENT' => 'Safari',
+			'HTTP_ACCEPT' => 'application/xhtml+xml,text/html,text/plain;q=0.9'
+		)));
+		$expected = array('application/xhtml+xml', 'text/html', 'text/plain');
+		$this->assertEqual($expected, $request->accepts(true));
+	}
+
+	public function testParsingAcceptHeader() {
+		$chrome = array(
+			'application/xml',
+			'application/xhtml+xml',
+			'text/html;q=0.9',
+			'text/plain;q=0.8',
+			'image/png',
+			'*/*;q=0.5'
+		);
+		$firefox = array(
+			'text/html',
+			'application/xhtml+xml',
+			'application/xml;q=0.9',
+			'*/*;q=0.8'
+		);
+		$safari = array(
+			'application/xml',
+			'application/xhtml+xml',
+			'text/html;q=0.9',
+			'text/plain;q=0.8',
+			'image/png',
+			'*/*;q=0.5'
+		);
+		$opera = array(
+			'text/html',
+			'application/xml;q=0.9',
+			'application/xhtml+xml',
+			'image/png',
+			'image/jpeg',
+			'image/gif',
+			'image/x-xbitmap',
+			'*/*;q=0.1'
+		);
+		$android = array(
+			'application/xml',
+			'application/xhtml+xml',
+			'text/html;q=0.9',
+			'text/plain;q=0.8',
+			'image/png',
+			'*/*;q=0.5',
+			'application/youtube-client'
+		);
+		$request = new Request(array('env' => array('HTTP_ACCEPT' => join(',', $chrome))));
+		$this->assertEqual('html', $request->accepts());
+		$this->assertTrue(array_search('text/plain', $request->accepts(true)), 4);
+
+		$request = new Request(array('env' => array('HTTP_ACCEPT' => join(',', $safari))));
+		$this->assertEqual('html', $request->accepts());
+
+		$request = new Request(array('env' => array('HTTP_ACCEPT' => join(',', $firefox))));
+		$this->assertEqual('html', $request->accepts());
+
+		$request = new Request(array('env' => array('HTTP_ACCEPT' => join(',', $opera))));
+		$this->assertEqual('html', $request->accepts());
+
+		$request = new Request(array('env' => array('HTTP_ACCEPT' => join(',', $chrome))));
+		$request->params['type'] = 'txt';
+
+		$result = $request->accepts(true);
+		$this->assertEqual('text/plain', $result[0]);
+
+		$request = new Request(array('env' => array('HTTP_ACCEPT' => join(',', $android))));
 		$this->assertEqual('html', $request->accepts());
 	}
 }

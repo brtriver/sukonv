@@ -36,14 +36,14 @@ abstract class Database extends \lithium\data\Source {
 	 * Strings used to render the given statement
 	 *
 	 * @see lithium\data\source\Database::renderCommand()
-	 * @var string
+	 * @var array
 	 */
 	protected $_strings = array(
 		'create' => "INSERT INTO {:source} ({:fields}) VALUES ({:values});{:comment}",
 		'update' => "UPDATE {:source} SET {:fields} {:conditions};{:comment}",
-		'delete' => "DELETE {:flags} From {:source} {:aliases} {:conditions};{:comment}",
+		'delete' => "DELETE {:flags} FROM {:source} {:alias} {:conditions};{:comment}",
 		'schema' => "CREATE TABLE {:source} (\n{:columns}{:indexes});{:comment}",
-		'join'   => "{:type} JOIN {:source} ON {:constraint}"
+		'join'   => "{:type} JOIN {:source} {:alias} {:constraint} {:conditions}"
 	);
 
 	/**
@@ -52,9 +52,9 @@ abstract class Database extends \lithium\data\Source {
 	 * @var array
 	 */
 	protected $_classes = array(
-		'entity' => '\lithium\data\entity\Record',
-		'set' => '\lithium\data\collection\RecordSet',
-		'relationship' => '\lithium\data\model\Relationship'
+		'entity' => 'lithium\data\entity\Record',
+		'set' => 'lithium\data\collection\RecordSet',
+		'relationship' => 'lithium\data\model\Relationship'
 	);
 
 	/**
@@ -71,7 +71,14 @@ abstract class Database extends \lithium\data\Source {
 		'!=' => array('multiple' => 'NOT IN'),
 		'<>' => array('multiple' => 'NOT IN'),
 		'between' => array('format' => 'BETWEEN ? AND ?'),
-		'BETWEEN' => array('format' => 'BETWEEN ? AND ?')
+		'BETWEEN' => array('format' => 'BETWEEN ? AND ?'),
+		'like' => array(),
+		'LIKE' => array()
+	);
+
+	protected $_constraintTypes = array(
+		'AND' => true,
+		'OR' => true
 	);
 
 	/**
@@ -89,17 +96,6 @@ abstract class Database extends \lithium\data\Source {
 	 * @return mixed.
 	 */
 	abstract public function encoding($encoding = null);
-
-	/**
-	 * Handle the result return from the
-	 * Abstract. Must be defined by child class.
-	 *
-	 * @param string $type next|close The current step in the iteration.
-	 * @param mixed $resource The result resource returned from the database.
-	 * @param \lithium\data\model\Query $context The given query.
-	 * @return void
-	 */
-	abstract public function result($type, $resource, $context);
 
 	/**
 	 * Return the last errors produced by a the execution of a query.
@@ -122,7 +118,7 @@ abstract class Database extends \lithium\data\Source {
 	 * Get the last insert id from the database.
 	 * Abstract. Must be defined by child class.
 	 *
-	 * @param \lithium\data\model\Query $context The given query.
+	 * @param lithium\data\model\Query $context The given query.
 	 * @return void
 	 */
 	abstract protected function _insertId($query);
@@ -131,10 +127,10 @@ abstract class Database extends \lithium\data\Source {
 	 * Creates the database object and set default values for it.
 	 *
 	 * Options defined:
-	 *  - 'database' _string_ Name of the database to use. Defaults to 'lithium'.
+	 *  - 'database' _string_ Name of the database to use. Defaults to `null`.
 	 *  - 'host' _string_ Name/address of server to connect to. Defaults to 'localhost'.
 	 *  - 'login' _string_ Username to use when connecting to server. Defaults to 'root'.
-	 *  - 'password' _string_ Password to use when connecting to server. Defaults to none.
+	 *  - 'password' _string_ Password to use when connecting to server. Defaults to `''`.
 	 *  - 'persistent' _boolean_ If true a persistent connection will be attempted, provided the
 	 *    adapter supports it. Defaults to `true`.
 	 *
@@ -150,7 +146,7 @@ abstract class Database extends \lithium\data\Source {
 			'database'   => null,
 		);
 		$this->_strings += array(
-			'read' => 'SELECT {:fields} From {:source} {:alias} {:joins} {:conditions} {:group} ' .
+			'read' => 'SELECT {:fields} FROM {:source} {:alias} {:joins} {:conditions} {:group} ' .
 			          '{:order} {:limit};{:comment}'
 		);
 		parent::__construct($config + $defaults);
@@ -165,6 +161,10 @@ abstract class Database extends \lithium\data\Source {
 	public function name($name) {
 		$open  = reset($this->_quotes);
 		$close = next($this->_quotes);
+		if (preg_match('/^[a-z0-9_-]+\.[a-z0-9_-]+$/i', $name)) {
+			list($first, $second) = explode('.', $name, 2);
+			return "{$open}{$first}{$close}.{$open}{$second}{$close}";
+		}
 		return preg_match('/^[a-z0-9_-]+$/i', $name) ? "{$open}{$name}{$close}" : $name;
 	}
 
@@ -173,7 +173,7 @@ abstract class Database extends \lithium\data\Source {
 	 *
 	 * @see lithium\data\source\Database::schema()
 	 * @param mixed $value The value to be converted. Arrays will be recursively converted.
-	 * @param array $schema Formatted array from `\lithium\data\source\Database::schema()`
+	 * @param array $schema Formatted array from `lithium\data\source\Database::schema()`
 	 * @return mixed value with converted type
 	 */
 	public function value($value, array $schema = array()) {
@@ -222,16 +222,17 @@ abstract class Database extends \lithium\data\Source {
 				$query = String::insert($query, $self->value($params['options']));
 			}
 
-			if ($self->invokeMethod('_execute', array($query))) {
-				if ($entity) {
-					if (($model) && !$model::key($entity)) {
-						$id = $self->invokeMethod('_insertId', array($object));
-					}
-					$entity->update($id);
-				}
-				return true;
+			if (!$self->invokeMethod('_execute', array($query))) {
+				return false;
 			}
-			return false;
+
+			if ($entity) {
+				if (($model) && !$model::key($entity)) {
+					$id = $self->invokeMethod('_insertId', array($object));
+				}
+				$entity->update($id);
+			}
+			return true;
 		});
 	}
 
@@ -242,12 +243,12 @@ abstract class Database extends \lithium\data\Source {
 	 * @param string $options If `$query` is a raw string, contains the values that will be escaped
 	 *               and quoted. Other options:
 	 *               - `'return'` _string_: switch return between `'array'`, `'item'`, or
-	 *                 `'resource'`; defaults to `'item'`.
+	 *                 `'resource'` _string_: Defaults to `'item'`.
 	 * @return mixed Determined by `$options['return']`.
 	 * @filter
 	 */
 	public function read($query, array $options = array()) {
-		$defaults = array('return' => 'item');
+		$defaults = array('return' => is_string($query) ? 'array' : 'item', 'schema' => array());
 		$options += $defaults;
 
 		return $this->_filter(__METHOD__, compact('query', 'options'), function($self, $params) {
@@ -267,18 +268,20 @@ abstract class Database extends \lithium\data\Source {
 				case 'resource':
 					return $result;
 				case 'array':
-					$columns = $self->schema($query, $result);
+					$columns = $args['schema'] ?: $self->schema($query, $result);
 					$records = array();
 
-					while ($data = $self->result('next', $result, null)) {
+					while ($data = $result->next()) {
+						// @hack: Fix this to support relationships
+						if ((count($columns) != count($data) && isset($columns[0])) || is_array($columns[0])) {
+							$columns = $columns[0];
+						}
 						$records[] = array_combine($columns, $data);
 					}
-					$self->result('close', $result, null);
 					return $records;
 				case 'item':
 					return $self->item($query->model(), array(), compact('query', 'result') + array(
 						'class' => 'set',
-						'handle' => $self,
 					));
 			}
 		});
@@ -287,7 +290,7 @@ abstract class Database extends \lithium\data\Source {
 	/**
 	 * Updates a record in the database based on the given `Query`.
 	 *
-	 * @param object $query A `\lithium\data\model\Query` object
+	 * @param object $query A `lithium\data\model\Query` object
 	 * @param array $options none
 	 * @return boolean
 	 */
@@ -322,10 +325,6 @@ abstract class Database extends \lithium\data\Source {
 
 			if (is_object($query)) {
 				$data = $query->export($self);
-
-				if (!$data['conditions']) {
-					return false;
-				}
 				$sql = $self->renderCommand('delete', $data, $query);
 			} else {
 				$sql = String::insert($query, $self->value($params['options']));
@@ -349,7 +348,9 @@ abstract class Database extends \lithium\data\Source {
 
 		switch ($type) {
 			case 'count':
-				$fields = $this->fields($query->fields(), $query);
+				if (strpos($fields = $this->fields($query->fields(), $query), ',') !== false) {
+					$fields = "*";
+				}
 				$query->fields("COUNT({$fields}) as count", true);
 				$query->map(array($query->model() => array('count')));
 				list($record) = $this->read($query, $options)->data();
@@ -375,21 +376,6 @@ abstract class Database extends \lithium\data\Source {
 	}
 
 	/**
-	 * Returns a newly-created `Record` object, bound to a model and populated with default data
-	 * and options.
-	 *
-	 * @param string $model A fully-namespaced class name representing the model class to which the
-	 *               `Record` object will be bound.
-	 * @param array $data The default data with which the new `Record` should be populated.
-	 * @param array $options Any additional options to pass to the `Record`'s constructor.
-	 * @return object Returns a new, un-saved `Record` object bound to the model class specified in
-	 *         `$model`.
-	 */
-	public function item($model, array $data = array(), array $options = array()) {
-		return parent::item($model, $data, array('handle' => $this) + $options);
-	}
-
-	/**
 	 * Returns a given `type` statement for the given data, rendered from `Database::$_strings`.
 	 *
 	 * @param string $type One of `'create'`, `'read'`, `'update'`, `'delete'` or `'join'`.
@@ -402,10 +388,6 @@ abstract class Database extends \lithium\data\Source {
 			$context = $type;
 			$data = $context->export($this);
 			$type = $context->type();
-
-			if (!isset($data['alias'])) {
-				$data['alias'] = "AS {$data['name']}";
-			}
 		}
 		if (!isset($this->_strings[$type])) {
 			throw new InvalidArgumentException("Invalid query type '{$type}'");
@@ -418,7 +400,7 @@ abstract class Database extends \lithium\data\Source {
 	 * Builds an array of keyed on the fully-namespaced `Model` with array of fields as values
 	 * for the given `Query`
 	 *
-	 * @param object $query A `\lithium\data\model\Query` object
+	 * @param object $query A `lithium\data\model\Query` object
 	 * @param string $resource
 	 * @param string $context
 	 * @return void
@@ -426,28 +408,31 @@ abstract class Database extends \lithium\data\Source {
 	public function schema($query, $resource = null, $context = null) {
 		$model = $query->model();
 		$fields = $query->fields();
-		$relations = $model::relations();
 		$result = array();
 
-		$ns = function($class) use ($model) {
-			static $namespace;
-			$namespace = $namespace ?: preg_replace('/\w+$/', '', $model);
-			return "{$namespace}{$class}";
-		};
+		if (!$model && is_array($fields)) {
+			return array($fields);
+		}
 
 		if (!$fields) {
 			return array($model => array_keys($model::schema()));
 		}
+		$namespace = preg_replace('/\w+$/', '', $model);
+		$relations = $model ? $model::relations() : array();
+		$schema = $model::schema();
 
 		foreach ($fields as $scope => $field) {
 			switch (true) {
 				case (is_numeric($scope) && $field == '*'):
 					$result[$model] = array_keys($model::schema());
 				break;
+				case (is_numeric($scope) && isset($schema[$field])):
+					$result[$model][] = $field;
+				break;
 				case (is_numeric($scope) && isset($relations[$field])):
 					$scope = $field;
 				case (in_array($scope, $relations, true) && $field == '*'):
-					$scope = $ns($scope);
+					$scope = $namespace . $scope;
 					$result[$scope] = array_keys($scope::schema());
 				break;
 				case (in_array($scope, $relations)):
@@ -493,32 +478,57 @@ abstract class Database extends \lithium\data\Source {
 
 		foreach ($conditions as $key => $value) {
 			$schema[$key] = isset($schema[$key]) ? $schema[$key] : array();
+			$return = $this->_processConditions($key,$value, $schema);
 
-			switch (true) {
-				case (is_numeric($key) && is_string($value)):
-					$result[] = $value;
-				break;
-				case (is_string($key) && is_object($value)):
-					$value = trim(rtrim($this->renderCommand($value), ';'));
-					$result[] = "{$key} IN ({$value})";
-				break;
-				case (is_string($key) && is_array($value) && isset($ops[key($value)])):
-					foreach ($value as $op => $val) {
-						$result[] = $this->_operator($key, array($op => $val), $schema[$key]);
-					}
-				break;
-				case (is_string($key) && is_array($value)):
-					$value = join(', ', $this->value($value, $schema));
-					$result[] = "{$key} IN ({$value})";
-				break;
-				default:
-					$value = $this->value($value, $schema);
-					$result[] = "{$key} = {$value}";
-				break;
+			if ($return) {
+				$result[] = $return;
 			}
 		}
 		$result = join(" AND ", $result);
 		return ($options['prepend'] && !empty($result)) ? "WHERE {$result}" : $result;
+	}
+
+	protected function _processConditions($key, $value, $schema, $glue = 'AND'){
+		$constraintTypes = &$this->_constraintTypes;
+
+		switch (true) {
+			case (is_numeric($key) && is_string($value)):
+				return $value;
+			case is_string($value):
+				return $this->name($key) . ' = ' . $this->value($value);
+			case is_numeric($key) && is_array($value):
+				$result = array();
+				foreach($value as $cField => $cValue) {
+					$result[] = $this->_processConditions($cField, $cValue, $schema, $glue);
+				}
+				return '(' . implode(' ' . $glue . ' ', $result) . ')';
+			case (is_string($key) && is_object($value)):
+				$value = trim(rtrim($this->renderCommand($value), ';'));
+				return "{$key} IN ({$value})";
+			case is_array($value) && isset($constraintTypes[strtoupper($key)]):
+				$result = array();
+				$glue = strtoupper($key);
+
+				foreach($value as $cField => $cValue) {
+					$result[] = $this->_processConditions($cField, $cValue, $schema, $glue);
+				}
+				return '(' . implode(' ' . $glue . ' ', $result) . ')';
+			case (is_string($key) && is_array($value) && isset($this->_operators[key($value)])):
+				foreach ($value as $op => $val) {
+					$result[] = $this->_operator($key, array($op => $val), $schema[$key]);
+				}
+				return '(' . implode(' ' . $glue . ' ', $result) . ')';
+			case is_array($value):
+				$value = join(', ', $this->value($value, $schema));
+				return "{$key} IN ({$value})";
+			default:
+				if (isset($value)) {
+					$value = $this->value($value, $schema);
+					return "{$key} = {$value}";
+				}
+				break;
+		}
+		return false;
 	}
 
 	/**
@@ -552,7 +562,7 @@ abstract class Database extends \lithium\data\Source {
 	 * Returns a LIMIT statement from the given limit and the offset of the context object.
 	 *
 	 * @param integer $limit An
-	 * @param object $context The `\lithium\data\model\Query` object
+	 * @param object $context The `lithium\data\model\Query` object
 	 * @return string
 	 */
 	public function limit($limit, $context) {
@@ -568,8 +578,8 @@ abstract class Database extends \lithium\data\Source {
 	/**
 	 * Returns a join statement for given array of query objects
 	 *
-	 * @param object|array $joins A single or array of `\lithium\data\model\Query` objects
-	 * @param object $context The parent `\lithium\data\model\Query` object
+	 * @param object|array $joins A single or array of `lithium\data\model\Query` objects
+	 * @param object $context The parent `lithium\data\model\Query` object
 	 * @return string
 	 */
 	public function joins(array $joins, $context) {
@@ -578,6 +588,23 @@ abstract class Database extends \lithium\data\Source {
 			$result .= $this->renderCommand('join', $join->export($this));
 		}
 		return $result;
+	}
+
+	public function constraint($constraint, $context) {
+		if (!$constraint) {
+			return "";
+		}
+		if (is_string($constraint)) {
+			return "ON {$constraint}";
+		}
+		$result = array();
+
+		foreach ($constraint as $field => $value) {
+			if (is_string($value)) {
+				$result[] = $this->name($field) . ' = ' . $this->name($value);
+			}
+		}
+		return 'ON ' . join(' AND ', $result);
 	}
 
 	/**
@@ -599,25 +626,29 @@ abstract class Database extends \lithium\data\Source {
 			$order = array($order => $direction);
 		}
 
-		if (is_array($order)) {
-			$result = array();
-
-			foreach ($order as $column => $dir) {
-				if (is_int($column)) {
-					$column = $dir;
-					$dir = $direction;
-				}
-				if (!in_array($dir, array('ASC', 'asc', 'DESC', 'desc'))) {
-					$dir = $direction;
-				}
-				if ($field = $model::schema($column)) {
-					$name = $this->name($model::meta('name')) . '.' . $this->name($column);
-					$result[] = "{$name} {$dir}";
-				}
-			}
-			$order = join(', ', $result);
-			return "ORDER BY {$order}";
+		if (!is_array($order)) {
+			return;
 		}
+		$result = array();
+
+		foreach ($order as $column => $dir) {
+			if (is_int($column)) {
+				$column = $dir;
+				$dir = $direction;
+			}
+			$dir = in_array($dir, array('ASC', 'asc', 'DESC', 'desc')) ? $dir : $direction;
+
+			if (!$model) {
+				$result[] = "{$column} {$dir}";
+				continue;
+			}
+			if ($field = $model::schema($column)) {
+				$name = $this->name($model::meta('name')) . '.' . $this->name($column);
+				$result[] = "{$name} {$dir}";
+			}
+		}
+		$order = join(', ', $result);
+		return "ORDER BY {$order}";
 	}
 
 	/**
@@ -628,6 +659,17 @@ abstract class Database extends \lithium\data\Source {
 	 */
 	public function comment($comment) {
 		return $comment ? "/* {$comment} */" : null;
+	}
+
+	public function alias($alias, $context) {
+		if (!$alias && ($model = $context->model())) {
+			$alias = $model::meta('name');
+		}
+		return $alias ? "AS " . $this->name($alias) : null;
+	}
+
+	public function cast($entity, array $data, array $options = array()) {
+		return $data;
 	}
 
 	protected function _createFields($data, $schema, $context) {

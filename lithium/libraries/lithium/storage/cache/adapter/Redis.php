@@ -68,7 +68,7 @@ class Redis extends \lithium\core\Object {
 		$defaults = array(
 			'prefix' => '',
 			'expiry' => '+1 hour',
-			'server' => '127.0.0.1:6379'
+			'server' => '127.0.0.1:6379',
 		);
 		parent::__construct($config + $defaults);
 	}
@@ -110,21 +110,26 @@ class Redis extends \lithium\core\Object {
 		$connection =& static::$connection;
 		$expiry = ($expiry) ?: $this->_config['expiry'];
 
-		return function($self, $params, $chain) use (&$connection, $expiry) {
+		return function($self, $params) use (&$connection, $expiry) {
 			if (is_array($params['key'])) {
 				$expiry = $params['data'];
 
 				if ($connection->mset($params['key'])) {
 					$ttl = array();
 
-					foreach ($params['key'] as $k => $v) {
-						$ttl[$k] = $self->invokeMethod('_ttl', array($k, $expiry));
+					if ($expiry) {
+						foreach ($params['key'] as $k => $v) {
+							$ttl[$k] = $self->invokeMethod('_ttl', array($k, $expiry));
+						}
 					}
 					return $ttl;
 				}
 			}
-			if ($connection->set($params['key'], $params['data'])){
-				return $self->invokeMethod('_ttl', array($params['key'], $expiry));
+			if ($result = $connection->set($params['key'], $params['data'])){
+				if ($expiry) {
+					return $self->invokeMethod('_ttl', array($params['key'], $expiry));
+				}
+				return $result;
 			}
 		};
 	}
@@ -138,7 +143,7 @@ class Redis extends \lithium\core\Object {
 	public function read($key) {
 		$connection =& static::$connection;
 
-		return function($self, $params, $chain) use (&$connection) {
+		return function($self, $params) use (&$connection) {
 			$key = $params['key'];
 
 			if (is_array($key)) {
@@ -157,13 +162,17 @@ class Redis extends \lithium\core\Object {
 	public function delete($key) {
 		$connection =& static::$connection;
 
-		return function($self, $params, $chain) use (&$connection) {
+		return function($self, $params) use (&$connection) {
 			return (boolean) $connection->delete($params['key']);
 		};
 	}
 
 	/**
 	 * Performs an atomic decrement operation on specified numeric cache item.
+	 *
+	 * Note that if the value of the specified key is *not* an integer, the decrement
+	 * operation will have no effect whatsoever. Redis chooses to not typecast values
+	 * to integers when performing an atomic decrement operation.
 	 *
 	 * @param string $key Key of numeric cache item to decrement
 	 * @param integer $offset Offset to decrement - defaults to 1.
@@ -172,13 +181,17 @@ class Redis extends \lithium\core\Object {
 	public function decrement($key, $offset = 1) {
 		$connection =& static::$connection;
 
-		return function($self, $params, $chain) use (&$connection, $offset) {
+		return function($self, $params) use (&$connection, $offset) {
 			return $connection->decr($params['key'], $offset);
 		};
 	}
 
 	/**
 	 * Performs an atomic increment operation on specified numeric cache item.
+	 *
+	 * Note that if the value of the specified key is *not* an integer, the increment
+	 * operation will have no effect whatsoever. Redis chooses to not typecast values
+	 * to integers when performing an atomic increment operation.
 	 *
 	 * @param string $key Key of numeric cache item to increment
 	 * @param integer $offset Offset to increment - defaults to 1.
@@ -187,7 +200,7 @@ class Redis extends \lithium\core\Object {
 	public function increment($key, $offset = 1) {
 		$connection =& static::$connection;
 
-		return function($self, $params, $chain) use (&$connection, $offset) {
+		return function($self, $params) use (&$connection, $offset) {
 			return $connection->incr($params['key'], $offset);
 		};
 	}

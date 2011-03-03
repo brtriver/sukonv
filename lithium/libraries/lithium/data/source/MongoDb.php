@@ -11,8 +11,10 @@ namespace lithium\data\source;
 use Mongo;
 use MongoId;
 use MongoCode;
+use MongoDate;
 use MongoDBRef;
 use MongoRegex;
+use MongoBinData;
 use MongoGridFSFile;
 use lithium\util\Inflector;
 use lithium\core\NetworkException;
@@ -61,9 +63,12 @@ class MongoDb extends \lithium\data\Source {
 	 * @var array
 	 */
 	protected $_classes = array(
-		'entity' => '\lithium\data\entity\Document',
-		'set' => '\lithium\data\collection\DocumentSet',
-		'relationship' => '\lithium\data\model\Relationship'
+		'entity'   => 'lithium\data\entity\Document',
+		'array'    => 'lithium\data\collection\DocumentArray',
+		'set'      => 'lithium\data\collection\DocumentSet',
+		'result'   => 'lithium\data\source\mongo_db\Result',
+		'exporter' => 'lithium\data\source\mongo_db\Exporter',
+		'relationship' => 'lithium\data\model\Relationship',
 	);
 
 	/**
@@ -72,23 +77,37 @@ class MongoDb extends \lithium\data\Source {
 	 * @var array Keys are SQL-like operators, value is the MongoDB equivalent.
 	 */
 	protected $_operators = array(
-		'<' => '$lt',
-		'>' => '$gt',
-		'<=' =>  '$lte',
-		'>=' => '$gte',
-		'!=' => array('single' => '$ne', 'multiple' => '$nin'),
-		'<>' => array('single' => '$ne', 'multiple' => '$nin')
+		'<'   => '$lt',
+		'>'   => '$gt',
+		'<='  =>  '$lte',
+		'>='  => '$gte',
+		'!='  => array('single' => '$ne', 'multiple' => '$nin'),
+		'<>'  => array('single' => '$ne', 'multiple' => '$nin'),
+		'or'  => '$or',
+		'||'  => '$or',
+		'not' => '$not',
+		'!'   =>  '$not',
 	);
 
 	/**
 	 * A closure or anonymous function which receives an instance of this class, a collection name
-	 * and associated meta information, and returns an array defining the schema for that model,
-	 * where the keys are field names, and the values are arrays defining the type information for
-	 * the field. At a minimum, type arrays must contain a `'type'` key.
+	 * and associated meta information, and returns an array defining the schema for an associated
+	 * model, where the keys are field names, and the values are arrays defining the type
+	 * information for each field. At a minimum, type arrays must contain a `'type'` key. For more
+	 * information on schema definitions, and an example schema callback implementation, see the
+	 * `$_schema` property of the `Model` class.
 	 *
-	 * @var closure
+	 * @see lithium\data\Model::$_schema
+	 * @var Closure
 	 */
 	protected $_schema = null;
+
+	/**
+	 * An array of closures that handle casting values to specific types.
+	 *
+	 * @var array
+	 */
+	protected $_handlers = array();
 
 	/**
 	 * List of configuration keys which will be automatically assigned to their corresponding
@@ -96,7 +115,7 @@ class MongoDb extends \lithium\data\Source {
 	 *
 	 * @var array
 	 */
-	protected $_autoConfig = array('schema');
+	protected $_autoConfig = array('schema', 'handlers', 'classes' => 'merge');
 
 	/**
 	 * Instantiates the MongoDB adapter with the default connection information.
@@ -104,16 +123,21 @@ class MongoDb extends \lithium\data\Source {
 	 * @see lithium\data\Connections::add()
 	 * @see lithium\data\source\MongoDb::$_schema
 	 * @param array $config All information required to connect to the database, including:
-	 *        - `'database'` _string_: The name of the database to connect to. Defaults to `'app'`.
+	 *        - `'database'` _string_: The name of the database to connect to. Defaults to `null`.
 	 *        - `'host'` _string_: The IP or machine name where Mongo is running, followed by a
 	 *           colon, and the port number. Defaults to `'localhost:27017'`.
-	 *        - `'persistent'` _boolean_: If a persistent connection (if available) should be made.
-	 *            Defaults to `true`.
-	 *        - `'port'`_mixed_: The port number Mongo is listening on. The default is '27017'.
+	 *        - `'persistent'` _mixed_: Determines a persistent connection to attach to. See the
+	 *           `$options` parameter of
+	 *            [`Mongo::__construct()`](http://www.php.net/manual/en/mongo.construct.php) for
+	 *            more information. Defaults to `false`, meaning no persistent connection is made.
 	 *        - `'timeout'` _integer_: The number of milliseconds a connection attempt will wait
 	 *          before timing out and throwing an exception. Defaults to `100`.
 	 *        - `'schema'` _closure_: A closure or anonymous function which returns the schema
 	 *          information for a model class. See the `$_schema` property for more information.
+	 *        - `'gridPrefix'` _string_: The default prefix for MongoDB's `chunks` and `files`
+	 *          collections. Defaults to `'fs'`.
+	 *        - `'replicaSet'` _boolean_: See the documentation for `Mongo::__construct()`. Defaults
+	 *          to `false`.
 	 *
 	 * Typically, these parameters are set in `Connections::add()`, when adding the adapter to the
 	 * list of active connections.
@@ -121,12 +145,13 @@ class MongoDb extends \lithium\data\Source {
 	 */
 	public function __construct(array $config = array()) {
 		$defaults = array(
-			'persistent' => true,
+			'persistent' => false,
 			'login'      => null,
 			'password'   => null,
-			'host'       => 'localhost:27107',
-			'database'   => 'app',
+			'host'       => Mongo::DEFAULT_HOST . ':' . Mongo::DEFAULT_PORT,
+			'database'   => null,
 			'timeout'    => 100,
+			'replicaSet' => false,
 			'schema'     => null,
 			'gridPrefix' => 'fs',
 		);
@@ -138,6 +163,22 @@ class MongoDb extends \lithium\data\Source {
 
 		$this->_operators += array(
 			'like' => function($key, $value) { return new MongoRegex($value); }
+		);
+
+		$this->_handlers += array(
+			'id' => function($v) {
+				return is_string($v) && preg_match('/^[0-9a-f]{24}$/', $v) ? new MongoId($v) : $v;
+			},
+			'date' => function($v) {
+				$v = is_numeric($v) ? intval($v) : strtotime($v);
+				return (time() == $v) ? new MongoDate() : new MongoDate($v);
+			},
+			'regex'   => function($v) { return new MongoRegex($v); },
+			'integer' => function($v) { return (integer) $v; },
+			'float'   => function($v) { return (float) $v; },
+			'boolean' => function($v) { return (boolean) $v; },
+			'code'    => function($v) { return new MongoCode($v); },
+			'binary'  => function($v) { return new MongoBinData($v); },
 		);
 	}
 
@@ -186,35 +227,40 @@ class MongoDb extends \lithium\data\Source {
 	 *         their respective properties in `Model`.
 	 */
 	public function configureClass($class) {
-		return array('meta' => array('key' => '_id'), 'classes' => array(
-			'entity' => $this->_classes['entity'],
-			'set' => $this->_classes['set'],
-		));
+		return array(
+			'meta' => array('key' => '_id', 'locked' => false),
+			'schema' => array()
+		);
 	}
 
 	/**
 	 * Connects to the Mongo server.
 	 *
-	 * @return boolean True if connected, false otherwise.
+	 * @return boolean Returns `true` the connection attempt was successful, otherwise `false`.
 	 */
 	public function connect() {
-		$config = $this->_config;
+		$cfg = $this->_config;
 		$this->_isConnected = false;
 
-		$host = $config['host'];
-		$login = $config['login'] ? "{$config['login']}:{$config['password']}@" : '';
-		$connection = "mongodb://{$login}{$host}" . ($login ? "/{$config['database']}" : '');
+		$host = is_array($cfg['host']) ? join(',', $cfg['host']) : $cfg['host'];
+		$login = $cfg['login'] ? "{$cfg['login']}:{$cfg['password']}@" : '';
+		$connection = "mongodb://{$login}{$host}" . ($login ? "/{$cfg['database']}" : '');
+		$options = array(
+			'connect' => true, 'timeout' => $cfg['timeout'], 'replicaSet' => $cfg['replicaSet']
+		);
 
 		try {
-			$this->server = new Mongo($connection, array(
-				'connect' => true,
-				'persist' => $config['persistent'],
-				'timeout' => $config['timeout']
-			));
-			if ($this->connection = $this->server->{$config['database']}) {
+			if ($persist = $cfg['persistent']) {
+				$options['persist'] = $persist === true ? 'default' : $persist;
+			}
+			$this->server = new Mongo($connection, $options);
+
+			if ($this->connection = $this->server->{$cfg['database']}) {
 				$this->_isConnected = true;
 			}
-		} catch (Exception $e) {}
+		} catch (Exception $e) {
+			throw new NetworkException("Could not connect to the database.", 503, $e);
+		}
 		return $this->_isConnected;
 	}
 
@@ -289,6 +335,9 @@ class MongoDb extends \lithium\data\Source {
 	 * @return mixed The return value of the native method specified in `$method`.
 	 */
 	public function __call($method, $params) {
+		if ((!$this->server) && !$this->connect()) {
+			return null;
+		}
 		return call_user_func_array(array(&$this->server, $method), $params);
 	}
 
@@ -314,36 +363,40 @@ class MongoDb extends \lithium\data\Source {
 	 * @return boolean
 	 */
 	public function create($query, array $options = array()) {
+		$defaults = array('safe' => false, 'fsync' => false);
+		$options += $defaults;
 		$this->_checkConnection();
+
 		$params = compact('query', 'options');
 		$_config = $this->_config;
+		$_exp = $this->_classes['exporter'];
 
-		return $this->_filter(__METHOD__, $params, function($self, $params) use ($_config) {
-			$query = $params['query'];
+		return $this->_filter(__METHOD__, $params, function($self, $params) use ($_config, $_exp) {
+			$query   = $params['query'];
 			$options = $params['options'];
-
-			$data = $self->invokeMethod('_toMongoId', array($query->data()));
-			$params = $query->export($self);
+			$data    = $_exp::get('create', $query->entity()->export());
 			$gridCol = "{$_config['gridPrefix']}.files";
+			$source  = $query->source();
 
-			if ($query->source() == $gridCol && isset($params['data']['file'])) {
+			if ($source == $gridCol && isset($data['create']['file'])) {
 				$result = array('ok' => true);
-				$data['_id'] = $self->invokeMethod('_saveFile', array($params));
+				$data['create']['_id'] = $self->invokeMethod('_saveFile', array($data['create']));
 			} else {
-				$result = $self->connection->{$params['source']}->insert($data, true);
+				$result = $self->connection->{$source}->insert($data['create'], $options);
 			}
 
-			if (isset($result['ok']) && (boolean) $result['ok'] === true) {
-				$query->entity()->update($data['_id']);
+			if ($result === true || isset($result['ok']) && (boolean) $result['ok'] === true) {
+				if ($query->entity()) {
+					$query->entity()->update($data['create']['_id']);
+				}
 				return true;
 			}
 			return false;
 		});
 	}
 
-	protected function _saveFile($params) {
+	protected function _saveFile($data) {
 		$uploadKeys = array('name', 'type', 'tmp_name', 'error', 'size');
-		$data = $this->_toMongoId($params['data']);
 		$grid = $this->connection->getGridFS();
 		$file = null;
 		$method = null;
@@ -353,7 +406,7 @@ class MongoDb extends \lithium\data\Source {
 				if (!$data['file']['error'] && is_uploaded_file($data['file']['tmp_name'])) {
 					$method = 'storeFile';
 					$file = $data['file']['tmp_name'];
-					$data += array('filename' => $data['file']['name']);
+					$data['filename'] = $data['file']['name'];
 				}
 			break;
 			case (is_string($data['file']) && file_exists($data['file'])):
@@ -375,7 +428,7 @@ class MongoDb extends \lithium\data\Source {
 			$grid->delete($data['_id']);
 		}
 		unset($data['file']);
-		return $this->connection->getGridFS()->{$method}($file, $data);
+		return $grid->{$method}($file, $data);
 	}
 
 	/**
@@ -387,8 +440,9 @@ class MongoDb extends \lithium\data\Source {
 	 */
 	public function read($query, array $options = array()) {
 		$this->_checkConnection();
-		$defaults = array('return' => 'resource', 'model' => null);
+		$defaults = array('return' => 'resource');
 		$options += $defaults;
+
 		$params = compact('query', 'options');
 		$_config = $this->_config;
 
@@ -402,7 +456,7 @@ class MongoDb extends \lithium\data\Source {
 			if ($group = $args['group']) {
 				$result = $self->invokeMethod('_group', array($group, $args, $options));
 				$config = array('class' => 'set') + compact('query') + $result;
-				return $self->item($options['model'], $config['data'], $config);
+				return $self->item($query->model(), $config['data'], $config);
 			}
 			$collection = $self->connection->{$source};
 
@@ -414,9 +468,10 @@ class MongoDb extends \lithium\data\Source {
 			if ($query->calculate()) {
 				return $result;
 			}
-			$result = $result->sort($args['order'])->limit($args['limit'])->skip($args['offset']);
+			$resource = $result->sort($args['order'])->limit($args['limit'])->skip($args['offset']);
+			$result = $self->invokeMethod('_instance', array('result', compact('resource')));
 			$config = compact('result', 'query') + array('class' => 'set');
-			return $self->item($options['model'], array(), $config);
+			return $self->item($query->model(), array(), $config);
 		});
 	}
 
@@ -439,27 +494,31 @@ class MongoDb extends \lithium\data\Source {
 	 * @return boolean
 	 */
 	public function update($query, array $options = array()) {
-		$this->_checkConnection();
-		$defaults = array('atomic' => true);
+		$defaults = array('upsert' => false, 'multiple' => true, 'safe' => false, 'fsync' => false);
 		$options += $defaults;
+		$this->_checkConnection();
+
 		$params = compact('query', 'options');
 		$_config = $this->_config;
+		$_exp = $this->_classes['exporter'];
 
-		return $this->_filter(__METHOD__, $params, function($self, $params) use ($_config) {
-			$query = $params['query'];
+		return $this->_filter(__METHOD__, $params, function($self, $params) use ($_config, $_exp) {
 			$options = $params['options'];
-			$args = $query->export($self, $options);
-			$gridCol = "{$_config['gridPrefix']}.files";
+			$query  = $params['query'];
+			$args   = $query->export($self, array('keys' => array('conditions', 'source')));
+			$source = $args['source'];
+			$data   = $args['data'];
 
-			if ($args['source'] == $gridCol && isset($args['data']['file'])) {
-				$args['data']['_id'] = $self->invokeMethod('_saveFile', array($args));
+			if ($query->entity()) {
+				$data = $_exp::get('update', $data);
 			}
-			unset($args['data']['_id']);
 
-			$update = $self->invokeMethod('_toMongoId', array($args['data']));
-			$update = ($options['atomic']) ? array('$set' => $update) : $update;
+			if ($source == "{$_config['gridPrefix']}.files" && isset($data['update']['file'])) {
+				$args['data']['_id'] = $self->invokeMethod('_saveFile', array($data['update']));
+			}
+			$update = $query->entity() ? $_exp::toCommand($data) : $data;
 
-			if ($self->connection->{$args['source']}->update($args['conditions'], $update)) {
+			if ($self->connection->{$source}->update($args['conditions'], $update, $options)) {
 				$query->entity() ? $query->entity()->update() : null;
 				return true;
 			}
@@ -476,14 +535,14 @@ class MongoDb extends \lithium\data\Source {
 	 */
 	public function delete($query, array $options = array()) {
 		$this->_checkConnection();
+		$defaults = array('justOne' => false, 'safe' => false, 'fsync' => false);
+		$options = array_intersect_key($options + $defaults, $defaults);
 
 		return $this->_filter(__METHOD__, compact('query', 'options'), function($self, $params) {
 			$query = $params['query'];
 			$options = $params['options'];
-
-			$params = $query->export($self);
-			$conditions = $self->invokeMethod('_toMongoId', array($params['conditions']));
-			return $self->connection->{$params['source']}->remove($conditions);
+			$args = $query->export($self, array('keys' => array('source', 'conditions')));
+			return $self->connection->{$args['source']}->remove($args['conditions'], $options);
 		});
 	}
 
@@ -531,39 +590,6 @@ class MongoDb extends \lithium\data\Source {
 	}
 
 	/**
-	 * Allows for iteration over result sets.
-	 *
-	 * @param string $type One of 'next' or 'close'.
-	 * @param object $resource The resource to act upon.
-	 * @param object $context
-	 * @return mixed If `$type` is `next` and the resource has a `next` item, that item is
-	 *         returned. Null otherwise.
-	 */
-	public function result($type, $resource, $context) {
-		if (!is_object($resource)) {
-			return null;
-		}
-
-		switch ($type) {
-			case 'next':
-				$result = $resource->hasNext() ? $resource->getNext() : null;
-
-				if ($result instanceof MongoGridFSFile) {
-					$result = array('file' => $result) + $result->file;
-				}
-			break;
-			case 'close':
-				unset($resource);
-				$result = null;
-			break;
-			default:
-				$result = parent::result($type, $resource, $context);
-			break;
-		}
-		return $result;
-	}
-
-	/**
 	 * Formats `group` clauses for MongoDB.
 	 *
 	 * @param string|array $group The group clause.
@@ -589,7 +615,7 @@ class MongoDb extends \lithium\data\Source {
 	}
 
 	/**
-	 * Map incoming conditions with their corresponding MongoDB-native operators.
+	 * Maps incoming conditions with their corresponding MongoDB-native operators.
 	 *
 	 * @param array $conditions Array of conditions
 	 * @param object $context Context with which this method was called; currently
@@ -597,44 +623,89 @@ class MongoDb extends \lithium\data\Source {
 	 * @return array Transformed conditions
 	 */
 	public function conditions($conditions, $context) {
-		switch (true) {
-			case !$conditions:
-				return array();
-			case $conditions instanceof MongoCode:
-				return array('$where' => $conditions);
-			case is_string($conditions):
-				return array('$where' => new MongoCode($conditions));
-			case is_callable($context) && $context->type() == 'create':
-				return $this->_toMongoId($conditions);
+		$schema = array();
+		$model = null;
+
+		if (!$conditions) {
+			return array();
 		}
-		$conditions = $this->_toMongoId($conditions);
+		if ($code = $this->_isMongoCode($conditions)) {
+			return $code;
+		}
+		if ($context) {
+			$model = $context->model();
+			$schema = $context->schema();
+		}
+		return $this->_conditions($conditions, $model, $schema, $context);
+	}
+
+	protected function _conditions($conditions, $model, $schema, $context) {
+		$castOpts = compact('schema') + array('first' => true, 'arrays' => false);
 
 		foreach ($conditions as $key => $value) {
-			if ($key[0] === '$') {
+			if ($key === '$or' || $key === 'or' || $key === '||') {
+				foreach ($value as $i => $or) {
+					$value[$i] = $this->_conditions($or, $model, $schema, $context);
+				}
+				unset($conditions[$key]);
+				$conditions['$or'] = $value;
 				continue;
 			}
-			if (is_array($value) && (isset($this->_operators[key($value)]))) {
-				list($type, $data) = each($value);
+			if (is_object($value)) {
+				continue;
+			}
+			if (!is_array($value)) {
+				$conditions[$key] = $this->cast(null, array($key => $value), $castOpts);
+				continue;
+			}
+			$current = key($value);
+			$isOpArray = (isset($this->_operators[$current]) || $current[0] === '$');
 
-				if (is_callable($this->_operators[$type])) {
-					$handler = $this->_operators[$type];
-					$conditions[$key] = $handler($key, $data);
-					continue;
-				}
-				if (is_array($this->_operators[$type])) {
-					$format = (is_array($data)) ? 'multiple' : 'single';
-					$operator = $this->_operators[$type][$format];
-				} else {
-					$operator = $this->_operators[$type];
-				}
-				$conditions[$key] = array($operator => $data);
+			if (!$isOpArray) {
+				$data = array($key => $value);
+				$conditions[$key] = array('$in' => $this->cast($model, $data, $castOpts));
 				continue;
 			}
-			if (is_array($value) && strpos(key($value), '$') !== 0) {
-				$conditions[$key] = array('$in' => $value);
+			$operations = array();
+
+			foreach ($value as $op => $val) {
+				if (is_object($result = $this->_operator($model, $key, $op, $val, $schema))) {
+					$operations = $result;
+					break;
+				}
+				$operations += $this->_operator($model, $key, $op, $val, $schema);
 			}
+			$conditions[$key] = $operations;
 		}
 		return $conditions;
+	}
+
+	protected function _isMongoCode($conditions) {
+		if ($conditions instanceof MongoCode) {
+			return array('$where' => $conditions);
+		}
+		if (is_string($conditions)) {
+			return array('$where' => new MongoCode($conditions));
+		}
+	}
+
+	protected function _operator($model, $key, $op, $value, $schema) {
+		$castOpts = compact('schema') + array('first' => true, 'arrays' => false);
+
+		switch (true) {
+			case !isset($this->_operators[$op]):
+				return array($op => $this->cast($model, array($key => $value), $castOpts));
+			case is_callable($this->_operators[$op]):
+				return $this->_operators[$op]($key, $value);
+			case is_array($this->_operators[$op]):
+				$format = (is_array($value)) ? 'multiple' : 'single';
+				$operator = $this->_operators[$op][$format];
+			break;
+			default:
+				$operator = $this->_operators[$op];
+			break;
+		}
+		return array($operator => $value);
 	}
 
 	/**
@@ -694,38 +765,32 @@ class MongoDb extends \lithium\data\Source {
 		return $order ?: array();
 	}
 
-	/**
-	 * Returns a newly-created `Document` object, bound to a model and populated with default data
-	 * and options.
-	 *
-	 * @param string $model A fully-namespaced class name representing the model class to which the
-	 *               `Document` object will be bound.
-	 * @param array $data The default data with which the new `Document` should be populated.
-	 * @param array $options Any additional options to pass to the `Record`'s constructor.
-	 * @return object Returns a new, un-saved `Document` object bound to the model class specified
-	 *         in `$model`.
-	 */
-	public function item($model, array $data = array(), array $options = array()) {
-		return parent::item($model, $data, array('handle' => $this) + $options);
-	}
+	public function cast($entity, array $data, array $options = array()) {
+		$defaults = array('schema' => null, 'first' => false, 'pathKey' => null);
+		$options += $defaults;
+		$model = null;
 
-	/**
-	 * Adds a proper MongoId to the passed `$data` if an appropriate `_id` field with a
-	 * 24-character alphanumeric identifier exists.
-	 *
-	 * @param array|object $data The passed data. If `$data` is an object, no MongoId will
-	 *                     be generated and the original object will be returned.
-	 * @return array|object The passed `$data` with the `_id` parameter transformed into a
-	 *         `MongoId` object, or the original data if `_id` is not set, or if `_id` is already
-	 *         an object.
-	 */
-	protected function _toMongoId($data) {
-		if (isset($data['_id']) && !is_object($data['_id'])) {
-			if (preg_match('/^[0-9a-f]{24}$/', (string) $data['_id'])) {
-				$data['_id'] = new MongoId($data['_id']);
-			}
+		if (!$data) {
+			return $data;
 		}
-		return $data;
+
+		if (is_string($entity)) {
+			$model = $entity;
+			$entity = null;
+			$options['schema'] = $options['schema'] ?: $model::schema();
+		}
+		if ($entity && !$options['schema']) {
+			$options['schema'] = $entity->schema();
+		}
+		if ($entity) {
+			$model = $entity->model();
+		}
+		$schema = $options['schema'] ?: array('_id' => array('type' => 'id'));
+		unset($options['schema']);
+		$exporter = $this->_classes['exporter'];
+		$options += compact('model') + array('handlers' => $this->_handlers);
+
+		return parent::cast($entity, $exporter::cast($data, $schema, $this, $options), $options);
 	}
 
 	protected function _checkConnection() {

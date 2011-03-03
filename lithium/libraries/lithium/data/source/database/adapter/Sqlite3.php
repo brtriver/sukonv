@@ -66,7 +66,7 @@ class Sqlite3 extends \lithium\data\source\Database {
 			'flags'      => NULL,
 			'key'        => NULL
 		);
-		parent::__construct((array) $config + $defaults);
+		parent::__construct($config + $defaults);
 	}
 
 	/**
@@ -106,7 +106,7 @@ class Sqlite3 extends \lithium\data\source\Database {
 	 */
 	public function entities($model = null) {
 		$config = $this->_config;
-		$method = function($self, $params, $chain) use ($config) {
+		$method = function($self, $params) use ($config) {
 			return $self->query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;");
 		};
 		return $this->_filter(__METHOD__, compact('model'), $method);
@@ -127,7 +127,7 @@ class Sqlite3 extends \lithium\data\source\Database {
 	 */
 	public function describe($entity, array $meta = array()) {
 		$params = compact('entity', 'meta');
-		return $this->_filter(__METHOD__, $params, function($self, $params, $chain) {
+		return $this->_filter(__METHOD__, $params, function($self, $params) {
 			extract($params);
 
 			$name = $self->invokeMethod('_entityName', array($entity));
@@ -167,7 +167,7 @@ class Sqlite3 extends \lithium\data\source\Database {
 	public function encoding($encoding = null) {
 		$encodingMap = array('UTF-8' => 'utf8');
 
-		if (empty($encoding)) {
+		if (!$encoding) {
 			$encoding = $this->connection->querySingle('PRAGMA encoding');
 			return ($key = array_search($encoding, $encodingMap)) ? $key : $encoding;
 		}
@@ -177,39 +177,11 @@ class Sqlite3 extends \lithium\data\source\Database {
 	}
 
 	/**
-	 * Handle the result.
-	 *
-	 * @param string $type next|close The current step in the iteration.
-	 * @param mixed $resource The result resource returned from the database.
-	 * @param object $context The given query (an instance of `lithium\data\model\Query`).
-	 * @return mixed Result
-	 */
-	public function result($type, $resource, $context) {
-		if (!($resource instanceof SQLite3Result)) {
-			return null;
-		}
-
-		switch ($type) {
-			case 'next':
-				$result = $resource->fetchArray(SQLITE3_ASSOC);
-			break;
-			case 'close':
-				$resource->finalize();
-				$result = null;
-			break;
-			default:
-				$result = parent::result($type, $resource, $context);
-			break;
-		}
-		return $result;
-	}
-
-	/**
 	 * Converts a given value into the proper type based on a given schema definition.
 	 *
 	 * @see lithium\data\source\Database::schema()
 	 * @param mixed $value The value to be converted. Arrays will be recursively converted.
-	 * @param array $schema Formatted array from `\lithium\data\source\Database::schema()`
+	 * @param array $schema Formatted array from `lithium\data\source\Database::schema()`
 	 * @return mixed Value with converted type.
 	 */
 	public function value($value, array $schema = array()) {
@@ -278,10 +250,10 @@ class Sqlite3 extends \lithium\data\source\Database {
 		$params = compact('sql', 'options');
 		$conn =& $this->connection;
 
-		return $this->_filter(__METHOD__, $params, function($self, $params, $chain) use (&$conn) {
+		return $this->_filter(__METHOD__, $params, function($self, $params) use (&$conn) {
 			extract($params);
-			$result = $conn->query($sql);
-			if ( !($result instanceof SQLite3Result) ) {
+
+			if (!($result = $conn->query($sql)) instanceof SQLite3Result) {
 				list($code, $error) = $self->error();
 				throw new QueryException("$sql: $error", $code);
 			}

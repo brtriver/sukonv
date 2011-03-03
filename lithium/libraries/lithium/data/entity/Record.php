@@ -15,16 +15,6 @@ namespace lithium\data\entity;
 class Record extends \lithium\data\Entity {
 
 	/**
-	 * Classes used by `Record`.
-	 *
-	 * @var array
-	 */
-	protected $_classes = array(
-		'entity' => __CLASS__,
-		'set' => '\lithium\data\collection\RecordSet'
-	);
-
-	/**
 	 * Overloading for reading inaccessible properties.
 	 *
 	 * @param string $name Property name.
@@ -50,6 +40,9 @@ class Record extends \lithium\data\Entity {
 					return $this->_relationships[$name];
 				}
 			}
+		}
+		if (isset($this->_updated[$name])) {
+			return $this->_updated[$name];
 		}
 		if (isset($this->_data[$name])) {
 			return $this->_data[$name];

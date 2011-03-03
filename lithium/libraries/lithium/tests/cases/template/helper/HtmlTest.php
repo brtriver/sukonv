@@ -8,9 +8,9 @@
 
 namespace lithium\tests\cases\template\helper;
 
-use \lithium\net\http\Router;
-use \lithium\template\helper\Html;
-use \lithium\tests\mocks\template\helper\MockHtmlRenderer;
+use lithium\net\http\Router;
+use lithium\template\helper\Html;
+use lithium\tests\mocks\template\helper\MockHtmlRenderer;
 
 class HtmlTest extends \lithium\test\Unit {
 
@@ -280,6 +280,18 @@ class HtmlTest extends \lithium\test\Unit {
 			'<\/script>\s*$/',
 			$result
 		);
+
+		$result = $this->html->script("foo", array(
+			'async' => true, 'defer' => true, 'onload' => 'init()'
+		));
+
+		$this->assertTags($result, array('script' => array(
+			'type' => 'text/javascript',
+			'src' => '/js/foo.js',
+			'async' => 'async',
+			'defer' => 'defer',
+			'onload' => 'init()'
+		)));
 	}
 
 	/**
@@ -327,6 +339,19 @@ class HtmlTest extends \lithium\test\Unit {
 		$result = $this->html->style('http://whatever.com/screen.css?1234');
 		$expected['link']['href'] = 'regex:/http:\/\/.*\/screen\.css\?1234/';
 		$this->assertTags($result, $expected);
+	}
+	/**
+	 * Tests generating random tags for the <head> section
+	 *
+	 * @return void
+	 */
+	public function testHead() {
+		$result = $this->html->head('meta', array('options' => array('author' => 'foo')));
+		$expected = array('meta' => array('author' => 'foo'));
+		$this->assertTags($result, $expected);
+
+		$result = $this->html->head('unexisting-name', array('options' => array('author' => 'foo')));
+		$this->assertNull($result);
 	}
 
 	/**

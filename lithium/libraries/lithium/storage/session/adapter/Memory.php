@@ -8,7 +8,7 @@
 
 namespace lithium\storage\session\adapter;
 
-use \lithium\util\String;
+use lithium\util\String;
 
 /**
  * Simple memory session storage engine. Used for testing.
@@ -25,15 +25,12 @@ class Memory extends \lithium\core\Object {
 	/**
 	 * Obtain the session key.
 	 *
-	 * For this adapter, it is a UUID based on the SERVER_ADDR variable.
+	 * For this adapter, it is a UUID.
 	 *
 	 * @return string UUID.
 	 */
 	public static function key() {
-		$context = function ($value) use (&$config) {
-			return (isset($_SERVER['SERVER_ADDR'])) ? $_SERVER['SERVER_ADDR'] : '127.0.0.1';
-		};
-		return String::uuid($context);
+		return String::uuid();
 	}
 
 	/**
@@ -54,7 +51,7 @@ class Memory extends \lithium\core\Object {
 	 */
 	public function check($key, array $options = array()) {
 		$session =& $this->_session;
-		return function($self, $params, $chain) use (&$session) {
+		return function($self, $params) use (&$session) {
 			return isset($session[$params['key']]);
 		};
 	}
@@ -70,7 +67,7 @@ class Memory extends \lithium\core\Object {
 	public function read($key = null, array $options = array()) {
 		$session = $this->_session;
 
-		return function($self, $params, $chain) use ($session) {
+		return function($self, $params) use ($session) {
 			extract($params);
 
 			if (!$key) {
@@ -91,7 +88,7 @@ class Memory extends \lithium\core\Object {
 	public function write($key, $value, array $options = array()) {
 		$session =& $this->_session;
 
-		return function($self, $params, $chain) use (&$session) {
+		return function($self, $params) use (&$session) {
 			extract($params);
 			return (boolean) ($session[$key] = $value);
 		};
@@ -107,7 +104,7 @@ class Memory extends \lithium\core\Object {
 	public function delete($key, array $options = array()) {
 		$session =& $this->_session;
 
-		return function($self, $params, $chain) use (&$session) {
+		return function($self, $params) use (&$session) {
 			extract($params);
 			unset($session[$key]);
 		};
@@ -121,7 +118,7 @@ class Memory extends \lithium\core\Object {
 	public function clear(array $options = array()) {
 		$session =& $this->_session;
 
-		return function($self, $params, $chain) use (&$session) {
+		return function($self, $params) use (&$session) {
 			$session = array();
 		};
 	}

@@ -8,8 +8,8 @@
 
 namespace lithium\console;
 
-use \Exception;
-use \lithium\console\command\Help;
+use Exception;
+use lithium\console\command\Help;
 
 /**
  * The base class to inherit when writing console scripts in Lithium.
@@ -46,7 +46,7 @@ class Command extends \lithium\core\Object {
 	 * @var array
 	 */
 	protected $_classes = array(
-		'response' => '\lithium\console\Response'
+		'response' => 'lithium\console\Response'
 	);
 
 	/**
@@ -109,12 +109,14 @@ class Command extends \lithium\core\Object {
 		try {
 			$this->response->status = 1;
 			$result = $this->invokeMethod($action, $args);
+
 			if (is_int($result)) {
 				$this->response->status = $result;
 			} elseif ($result || $result === null) {
 				$this->response->status = 0;
 			}
 		} catch (Exception $e) {
+			$this->error($e->getMessage());
 			$this->response->status = 1;
 		}
 		return $this->response;
