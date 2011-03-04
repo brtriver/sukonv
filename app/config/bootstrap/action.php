@@ -22,8 +22,6 @@ use lithium\net\http\Router;
 use lithium\core\Environment;
 use lithium\action\Dispatcher;
 
-use lithium\security\Auth;
-
 /**
  * This filter intercepts the `run()` method of the `Dispatcher`, and first passes the `'request'`
  * parameter (an instance of the `Request` object) to the `Environment` class to detect which
@@ -51,10 +49,6 @@ Dispatcher::applyFilter('run', function($self, $params, $chain) {
 		$file = "{$config['path']}/config/routes.php";
 		file_exists($file) ? include $file : null;
 	}
-	//// $params['request']->url has this request url, like questions/index
-	//if (!Auth::check('default', null, array('writeSession' => false))) {
-	//	echo "action auth fail";
-	//}	
 	return $chain->next($self, $params, $chain);
 });
 

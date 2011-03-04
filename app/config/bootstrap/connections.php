@@ -37,7 +37,6 @@
  */
 use lithium\data\Connections;
 use lithium\core\Environment;
-
 /**
  * Uncomment this configuration to use MongoDB as your default database.
  */
